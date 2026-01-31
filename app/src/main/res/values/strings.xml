@@ -6,6 +6,8 @@
     <string name="lockscreen_category_summary">Single tap to sleep and other lock screen tweaks</string>
     <string name="pref_single_tap_sleep_title">Single tap to sleep</string>
     <string name="pref_single_tap_sleep_summary">Turn screen off with one tap on the lock screen</string>
+    <string name="pref_shuffle_pin_title">Shuffle PIN keys</string>
+    <string name="pref_shuffle_pin_summary">Randomize the PIN keypad layout on the lock screen</string>
     <string name="general_on">On</string>
     <string name="general_off">Off</string>
     <string name="restart_systemui">Restart SystemUI</string>

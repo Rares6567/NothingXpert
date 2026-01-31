@@ -16,6 +16,14 @@
 			android:title="@string/pref_single_tap_sleep_title"
 			app:iconSpaceReserved="false" />
 
+		<com.nothingxpert.ui.preferences.MaterialSwitchPreference
+			android:defaultValue="false"
+			android:key="pref_shuffle_pin"
+			android:summaryOn="@string/pref_shuffle_pin_summary"
+			android:summaryOff="@string/pref_shuffle_pin_summary"
+			android:title="@string/pref_shuffle_pin_title"
+			app:iconSpaceReserved="false" />
+
 	</com.nothingxpert.ui.preferences.MaterialPreferenceCategory>
 
 </PreferenceScreen>

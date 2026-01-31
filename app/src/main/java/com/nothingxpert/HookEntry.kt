@@ -14,6 +14,7 @@ import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.widget.TextView
 import de.robv.android.xposed.XSharedPreferences
 import kotlin.math.abs
 import kotlin.math.min
@@ -166,6 +167,22 @@ class HookEntry : IXposedHookLoadPackage {
             )
         } catch (t: Throwable) {
             XposedBridge.log("NothingXpert: TouchHandlingView hook failed: $t")
+        }
+
+        try {
+            XposedHelpers.findAndHookMethod(
+                "com.android.keyguard.KeyguardPinBasedInputView",
+                lpparam.classLoader,
+                "onFinishInflate",
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        if (!isShufflePinEnabled()) return
+                        shufflePinPad(param.thisObject)
+                    }
+                }
+            )
+        } catch (t: Throwable) {
+            XposedBridge.log("NothingXpert: shuffle PIN hook failed: $t")
         }
 
         try {
@@ -761,6 +778,22 @@ class HookEntry : IXposedHookLoadPackage {
         return prefs.getBoolean(PREF_ALLOW_SECURE, false)
     }
 
+    private fun isShufflePinEnabled(): Boolean {
+        try {
+            val file = java.io.File("/data/user_de/0/$MODULE_PKG/shared_prefs/${MODULE_PKG}_preferences.xml")
+            val xsp = if (file.exists()) XSharedPreferences(file) else XSharedPreferences(MODULE_PKG, "${MODULE_PKG}_preferences")
+            xsp.makeWorldReadable()
+            if (xsp.hasFileChanged()) xsp.reload()
+            if (xsp.contains(PREF_SHUFFLE_PIN)) {
+                return xsp.getBoolean(PREF_SHUFFLE_PIN, false)
+            }
+        } catch (_: Throwable) {
+        }
+        val app = currentApplication() ?: return false
+        val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(app)
+        return prefs.getBoolean(PREF_SHUFFLE_PIN, false)
+    }
+
     private fun isVolumeTracksEnabled(): Boolean {
         try {
             val file = java.io.File("/data/user_de/0/$MODULE_PKG/shared_prefs/${MODULE_PKG}_preferences.xml")
@@ -788,6 +821,30 @@ class HookEntry : IXposedHookLoadPackage {
         } catch (t: Throwable) {
             XposedBridge.log("NothingXpert: sendMediaCommand failed: $t")
             false
+        }
+    }
+
+    private fun shufflePinPad(pinView: Any) {
+        try {
+            val buttons = XposedHelpers.getObjectField(pinView, "mButtons") as? Array<*>
+            if (buttons == null || buttons.isEmpty()) return
+            val digits = (0..9).toMutableList()
+            digits.shuffle()
+            buttons.forEachIndexed { index, raw ->
+                if (index >= digits.size) return@forEachIndexed
+                val button = raw ?: return@forEachIndexed
+                val newDigit = digits[index]
+                XposedHelpers.setIntField(button, "mDigit", newDigit)
+                val digitText = XposedHelpers.getObjectField(button, "mDigitText") as? TextView
+                digitText?.text = newDigit.toString()
+                try {
+                    XposedHelpers.callMethod(button, "setContentDescription", newDigit.toString())
+                } catch (_: Throwable) {
+                }
+            }
+            XposedBridge.log("NothingXpert: shuffled PIN layout")
+        } catch (t: Throwable) {
+            XposedBridge.log("NothingXpert: shuffle PIN failed: $t")
         }
     }
 
@@ -865,6 +922,7 @@ class HookEntry : IXposedHookLoadPackage {
         const val PREF_SINGLE_TAP = "pref_single_tap_sleep"
         const val PREF_ALLOW_SECURE = "pref_allow_secure_screenshot"
         const val PREF_VOLUME_TRACKS = "pref_volume_longpress_tracks"
+        const val PREF_SHUFFLE_PIN = "pref_shuffle_pin"
         const val ENABLE_DOUBLE_TAP = false
         const val VOLUME_LONG_PRESS_DELAY_MS = 350L
 
