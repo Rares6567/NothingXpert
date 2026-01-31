@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	android:visibility="visible">
+
+	<com.nothingxpert.ui.preferences.MaterialPreferenceCategory
+		android:layout="@layout/custom_preference_category"
+		android:title="@string/pref_category_lockscreen"
+		app:iconSpaceReserved="false">
+
+		<com.nothingxpert.ui.preferences.MaterialSwitchPreference
+			android:defaultValue="true"
+			android:key="pref_single_tap_sleep"
+			android:summaryOff="@string/general_off"
+			android:summaryOn="@string/general_on"
+			android:title="@string/pref_single_tap_sleep_title"
+			app:iconSpaceReserved="false" />
+
+	</com.nothingxpert.ui.preferences.MaterialPreferenceCategory>
+
+</PreferenceScreen>

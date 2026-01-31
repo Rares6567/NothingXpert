@@ -1,0 +1,18 @@
+<resources>
+    <string name="app_name">NothingXpert</string>
+    <string name="xposed_description">Adds single-tap-to-sleep on the lock screen for NothingOS.</string>
+    <string name="status_text">Single-tap to sleep is handled by LSPosed hook in SystemUI.</string>
+    <string name="pref_category_lockscreen">Lock Screen</string>
+    <string name="lockscreen_category_summary">Single tap to sleep and other lock screen tweaks</string>
+    <string name="pref_single_tap_sleep_title">Single tap to sleep</string>
+    <string name="pref_single_tap_sleep_summary">Turn screen off with one tap on the lock screen</string>
+    <string name="general_on">On</string>
+    <string name="general_off">Off</string>
+    <string name="restart_systemui">Restart SystemUI</string>
+    <string name="pref_category_misc">Miscellaneous</string>
+    <string name="misc_category_summary">Other tweaks and customizations</string>
+    <string name="pref_allow_secure_title">Allow screenshots from restricted content</string>
+    <string name="pref_allow_secure_summary">Remove the secure flag so screenshots and screen recordings work where blocked</string>
+    <string name="pref_volume_tracks_title">Volume long-press for tracks</string>
+    <string name="pref_volume_tracks_summary">Screen off: hold volume + for next, volume – for previous</string>
+</resources>

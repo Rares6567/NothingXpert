@@ -1,0 +1,194 @@
+[
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/mipmap-anydpi-v26_ic_launcher_round.xml.flat",
+        "source": "com.nothingxpert.app-main-42:/mipmap-anydpi-v26/ic_launcher_round.xml"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/drawable_container_mid.xml.flat",
+        "source": "com.nothingxpert.app-main-42:/drawable/container_mid.xml"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/layout_item_category_card.xml.flat",
+        "source": "com.nothingxpert.app-main-42:/layout/item_category_card.xml"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/font_ndot57.otf.flat",
+        "source": "com.nothingxpert.app-main-42:/font/ndot57.otf"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/layout_custom_preference_switch.xml.flat",
+        "source": "com.nothingxpert.app-main-42:/layout/custom_preference_switch.xml"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/drawable_container_single.xml.flat",
+        "source": "com.nothingxpert.app-main-42:/drawable/container_single.xml"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/mipmap-xhdpi_ic_launcher.png.flat",
+        "source": "com.nothingxpert.app-main-42:/mipmap-xhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/mipmap-xxhdpi_ic_launcher_foreground.png.flat",
+        "source": "com.nothingxpert.app-main-42:/mipmap-xxhdpi/ic_launcher_foreground.png"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/xml_misc_preferences.xml.flat",
+        "source": "com.nothingxpert.app-main-42:/xml/misc_preferences.xml"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/drawable_ic_switch_thumb.xml.flat",
+        "source": "com.nothingxpert.app-main-42:/drawable/ic_switch_thumb.xml"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/mipmap-hdpi_ic_launcher.png.flat",
+        "source": "com.nothingxpert.app-main-42:/mipmap-hdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/mipmap-xxxhdpi_ic_launcher_round.png.flat",
+        "source": "com.nothingxpert.app-main-42:/mipmap-xxxhdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/mipmap-xxxhdpi_ic_launcher_foreground.png.flat",
+        "source": "com.nothingxpert.app-main-42:/mipmap-xxxhdpi/ic_launcher_foreground.png"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/mipmap-xhdpi_ic_launcher_foreground.png.flat",
+        "source": "com.nothingxpert.app-main-42:/mipmap-xhdpi/ic_launcher_foreground.png"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/mipmap-xxhdpi_ic_launcher.png.flat",
+        "source": "com.nothingxpert.app-main-42:/mipmap-xxhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/mipmap-xhdpi_ic_launcher_round.png.flat",
+        "source": "com.nothingxpert.app-main-42:/mipmap-xhdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/mipmap-hdpi_ic_launcher_round.png.flat",
+        "source": "com.nothingxpert.app-main-42:/mipmap-hdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/xml_preferences.xml.flat",
+        "source": "com.nothingxpert.app-main-42:/xml/preferences.xml"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/anim_slide_in_right.xml.flat",
+        "source": "com.nothingxpert.app-main-42:/anim/slide_in_right.xml"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/anim_fade_scale_out.xml.flat",
+        "source": "com.nothingxpert.app-main-42:/anim/fade_scale_out.xml"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/color_text_color_primary.xml.flat",
+        "source": "com.nothingxpert.app-main-42:/color/text_color_primary.xml"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/anim_slide_in_left.xml.flat",
+        "source": "com.nothingxpert.app-main-42:/anim/slide_in_left.xml"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/drawable_container_bottom.xml.flat",
+        "source": "com.nothingxpert.app-main-42:/drawable/container_bottom.xml"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/layout_fragment_preference_container.xml.flat",
+        "source": "com.nothingxpert.app-main-42:/layout/fragment_preference_container.xml"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/layout_activity_settings.xml.flat",
+        "source": "com.nothingxpert.app-main-42:/layout/activity_settings.xml"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/drawable_ic_settings_misc.xml.flat",
+        "source": "com.nothingxpert.app-main-42:/drawable/ic_settings_misc.xml"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/drawable_ic_cross.xml.flat",
+        "source": "com.nothingxpert.app-main-42:/drawable/ic_cross.xml"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/drawable_ic_tick.xml.flat",
+        "source": "com.nothingxpert.app-main-42:/drawable/ic_tick.xml"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/drawable_main_preference_icon_bg.xml.flat",
+        "source": "com.nothingxpert.app-main-42:/drawable/main_preference_icon_bg.xml"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/mipmap-mdpi_ic_launcher_foreground.png.flat",
+        "source": "com.nothingxpert.app-main-42:/mipmap-mdpi/ic_launcher_foreground.png"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/drawable_container_top.xml.flat",
+        "source": "com.nothingxpert.app-main-42:/drawable/container_top.xml"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/mipmap-xxxhdpi_ic_launcher.png.flat",
+        "source": "com.nothingxpert.app-main-42:/mipmap-xxxhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/mipmap-anydpi-v26_ic_launcher.xml.flat",
+        "source": "com.nothingxpert.app-main-42:/mipmap-anydpi-v26/ic_launcher.xml"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/anim_fade_scale_in.xml.flat",
+        "source": "com.nothingxpert.app-main-42:/anim/fade_scale_in.xml"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/drawable_ic_restart.xml.flat",
+        "source": "com.nothingxpert.app-main-42:/drawable/ic_restart.xml"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/layout_custom_preference_material_switch.xml.flat",
+        "source": "com.nothingxpert.app-main-42:/layout/custom_preference_material_switch.xml"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/mipmap-xxhdpi_ic_launcher_round.png.flat",
+        "source": "com.nothingxpert.app-main-42:/mipmap-xxhdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/drawable_ic_settings_lockscreen.xml.flat",
+        "source": "com.nothingxpert.app-main-42:/drawable/ic_settings_lockscreen.xml"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/color_text_color_secondary.xml.flat",
+        "source": "com.nothingxpert.app-main-42:/color/text_color_secondary.xml"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/layout_activity_main.xml.flat",
+        "source": "com.nothingxpert.app-main-42:/layout/activity_main.xml"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/anim_slide_out_left.xml.flat",
+        "source": "com.nothingxpert.app-main-42:/anim/slide_out_left.xml"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/mipmap-mdpi_ic_launcher_round.png.flat",
+        "source": "com.nothingxpert.app-main-42:/mipmap-mdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/drawable_ic_chevron_right.xml.flat",
+        "source": "com.nothingxpert.app-main-42:/drawable/ic_chevron_right.xml"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/anim_slide_out_right.xml.flat",
+        "source": "com.nothingxpert.app-main-42:/anim/slide_out_right.xml"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/mipmap-mdpi_ic_launcher.png.flat",
+        "source": "com.nothingxpert.app-main-42:/mipmap-mdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/menu_menu_main.xml.flat",
+        "source": "com.nothingxpert.app-main-42:/menu/menu_main.xml"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/mipmap-hdpi_ic_launcher_foreground.png.flat",
+        "source": "com.nothingxpert.app-main-42:/mipmap-hdpi/ic_launcher_foreground.png"
+    },
+    {
+        "merged": "com.nothingxpert.app-merged_res-40:/layout_custom_preference_category.xml.flat",
+        "source": "com.nothingxpert.app-main-42:/layout/custom_preference_category.xml"
+    }
+]

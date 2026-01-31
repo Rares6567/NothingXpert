@@ -1,0 +1,83 @@
+<resources>
+    <!-- Main app theme using Material 3 -->
+    <style name="Theme.NothingXpert" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Window layout -->
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:windowBackground">?attr/colorSurfaceContainer</item>
+        <item name="android:colorBackground">?attr/colorSurfaceContainer</item>
+
+        <!-- App theme -->
+        <item name="android:enforceStatusBarContrast">false</item>
+        <item name="alertDialogTheme">@style/MaterialComponents.MaterialAlertDialog</item>
+        <item name="materialAlertDialogTheme">@style/MaterialComponents.MaterialAlertDialog</item>
+        <item name="textAppearanceListItem">@style/TextAppearance.App.ListItem.Title</item>
+        <item name="android:windowLightStatusBar">?attr/isLightTheme</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightNavigationBar">?attr/isLightTheme</item>
+        <item name="android:enforceNavigationBarContrast">false</item>
+        <item name="colorSurface">?attr/colorSurfaceContainer</item>
+    </style>
+
+    <!-- Preference theme overlays -->
+    <style name="PrefsTheme" parent="PreferenceThemeOverlay.v14.Material">
+        <item name="android:layout">@layout/fragment_preference_container</item>
+    </style>
+
+    <!-- Text appearance styles -->
+    <style name="TextAppearance.App.ListItem.Title" parent="TextAppearance.AppCompat.Subhead">
+        <item name="android:textSize">19sp</item>
+    </style>
+
+    <style name="TextAppearance.Preference.Title" parent="TextAppearance.Material3.TitleMedium">
+        <item name="lineHeight">20sp</item>
+    </style>
+
+    <style name="TextAppearance.Preference.Summary" parent="TextAppearance.Material3.BodyMedium">
+        <item name="lineHeight">18sp</item>
+        <item name="android:layout_marginTop">2dp</item>
+    </style>
+
+    <!-- Dialog styles -->
+    <style name="MaterialComponents.MaterialAlertDialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
+        <item name="android:background">?attr/colorSurfaceContainer</item>
+        <item name="android:dialogCornerRadius">@dimen/ui_container_radius</item>
+        <item name="materialAlertDialogTitleTextStyle">@style/MaterialAlertDialog.Title.Text</item>
+        <item name="materialAlertDialogBodyTextStyle">@style/MaterialAlertDialog.Body.Text</item>
+        <item name="buttonBarPositiveButtonStyle">@style/MaterialAlertDialog.Button.Text</item>
+        <item name="buttonBarNegativeButtonStyle">@style/MaterialAlertDialog.Button.Text</item>
+        <item name="android:backgroundDimAmount">0.6</item>
+    </style>
+
+    <style name="MaterialAlertDialog.Title.Text" parent="MaterialAlertDialog.MaterialComponents.Title.Text">
+        <item name="android:background">?attr/colorSurfaceContainer</item>
+        <item name="android:textSize">20sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+    </style>
+
+    <style name="MaterialAlertDialog.Body.Text" parent="MaterialAlertDialog.MaterialComponents.Body.Text">
+        <item name="android:background">?attr/colorSurfaceContainer</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:fontFamily">sans-serif</item>
+    </style>
+
+    <style name="MaterialAlertDialog.Button.Text" parent="Widget.Material3.Button.TextButton.Dialog">
+        <item name="android:backgroundTint">?attr/colorSurfaceContainer</item>
+        <item name="android:foreground">?attr/selectableItemBackground</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+    </style>
+
+    <!-- Toolbar styles -->
+    <style name="Toolbar.TitleText" parent="TextAppearance.Material3.TitleLarge" />
+
+    <style name="Toolbar.TitleText.Collapsed">
+        <item name="android:textSize">22sp</item>
+        <item name="fontFamily">sans-serif</item>
+        <item name="android:fontFamily">sans-serif</item>
+    </style>
+
+    <style name="Toolbar.TitleText.Expanded" parent="TextAppearance.Material3.TitleLarge">
+        <item name="android:textSize">38sp</item>
+    </style>
+</resources>
