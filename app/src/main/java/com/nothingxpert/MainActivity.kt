@@ -11,6 +11,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.HandlerThread
 import android.text.format.Formatter
+import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
@@ -466,52 +467,57 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateCpuUsage(force: Boolean = false) {
-        var usageProp = -1
-        var tempProp: String? = null
-        try {
-            // Read from Settings.Global which is writable by system_server and readable by app
-            usageProp = android.provider.Settings.Global.getString(contentResolver, "nothingxpert_cpu_usage")?.toIntOrNull() ?: -1
-            tempProp = android.provider.Settings.Global.getString(contentResolver, "nothingxpert_cpu_temp")
-        } catch (_: Throwable) {
-        }
-
-        if (usageProp >= 0) {
-            val tempStr = when {
-                !tempProp.isNullOrBlank() -> "${tempProp}°C"
-                else -> readCpuTempExact()?.let { "${it}°C" } ?: "--°C"
-            }
-            cpuValue.text = getString(R.string.cpu_monitor_format, usageProp.coerceIn(0, 100), tempStr)
-            return
-        }
-
         // Local two-sample diff off the main thread to avoid UI lag.
         Thread {
+            var usageProp = -1
+            var tempProp: String? = null
+            try {
+                usageProp = android.provider.Settings.Global.getString(contentResolver, "nothingxpert_cpu_usage")?.toIntOrNull() ?: -1
+                tempProp = android.provider.Settings.Global.getString(contentResolver, "nothingxpert_cpu_temp")
+            } catch (_: Throwable) { }
+
             val usage = computeCpuUsageTwoSample()
             val temp = readCpuTempExact()
             runOnUiThread {
-                val tempStr = temp?.let { "${it}°C" } ?: "--°C"
-                cpuValue.text = getString(R.string.cpu_monitor_format, usage ?: 0, tempStr)
+                val tempStr = when {
+                    !tempProp.isNullOrBlank() -> "${tempProp}°C"
+                    temp != null -> "${temp}°C"
+                    else -> "--°C"
+                }
+                val shownUsage = when {
+                    usageProp >= 0 -> usageProp
+                    usage != null -> usage
+                    lastCpuUsage >= 0 -> lastCpuUsage
+                    else -> 0
+                }
+                cpuValue.text = getString(R.string.cpu_monitor_format, shownUsage, tempStr)
             }
         }.start()
     }
 
     private fun computeCpuUsageTwoSample(): Int? {
-        val first = parseCpuTotals(readFile("/proc/stat")) ?: return null
+        val firstLine = readCpuStatLine() ?: return null.also { Log.w(CPU_LOG_TAG, "readCpuStatLine first null") }
+        val first = parseCpuTotals(firstLine) ?: return null.also { Log.w(CPU_LOG_TAG, "parse first null line=$firstLine") }
         try {
-            Thread.sleep(200)
+            Thread.sleep(800) // larger window for a clearer delta
         } catch (_: InterruptedException) {
         }
-        val second = parseCpuTotals(readFile("/proc/stat")) ?: return null
+        val secondLine = readCpuStatLine() ?: return null.also { Log.w(CPU_LOG_TAG, "readCpuStatLine second null") }
+        val second = parseCpuTotals(secondLine) ?: return null.also { Log.w(CPU_LOG_TAG, "parse second null line=$secondLine") }
         val totalDiff = second.first - first.first
         val idleDiff = second.second - first.second
-        if (totalDiff <= 0) return null
-        return (((totalDiff - idleDiff).toDouble() / totalDiff) * 100).toInt().coerceIn(0, 100)
+        if (totalDiff <= 0 || idleDiff < 0) return null
+        val busy = (totalDiff - idleDiff).toDouble()
+        val pct = ((busy / totalDiff.toDouble()) * 100.0).toInt().coerceIn(0, 100)
+        Log.d(CPU_LOG_TAG, "cpu usage totalDiff=$totalDiff idleDiff=$idleDiff pct=$pct first='$firstLine' second='$secondLine'")
+        lastCpuUsage = pct
+        return pct
     }
 
     private fun parseCpuTotals(statContent: String?): Pair<Long, Long>? {
-        val line = statContent?.lineSequence()?.firstOrNull { it.trimStart().startsWith("cpu ") } ?: return null
+        val line = statContent?.lineSequence()?.firstOrNull { it.trimStart().startsWith("cpu ") } ?: statContent ?: return null
         val parts = line.trim().split("\\s+".toRegex()).filter { it.isNotBlank() }
-        if (parts.size < 8) return null
+        if (parts.size < 5) return null
         val user = parts[1].toLongOrNull() ?: return null
         val nice = parts[2].toLongOrNull() ?: return null
         val system = parts[3].toLongOrNull() ?: return null
@@ -519,11 +525,37 @@ class MainActivity : AppCompatActivity() {
         val iowait = parts.getOrNull(5)?.toLongOrNull() ?: 0
         val irq = parts.getOrNull(6)?.toLongOrNull() ?: 0
         val softirq = parts.getOrNull(7)?.toLongOrNull() ?: 0
+        val steal = parts.getOrNull(8)?.toLongOrNull() ?: 0
 
         val idleAll = idle + iowait
-        val nonIdle = user + nice + system + irq + softirq
+        val nonIdle = user + nice + system + irq + softirq + steal
         val total = idleAll + nonIdle
         return total to idleAll
+    }
+
+    private fun readCpuStatLine(): String? {
+        // Try direct read first
+        try {
+            java.io.File("/proc/stat").takeIf { it.exists() }?.let { file ->
+                file.bufferedReader().useLines { seq ->
+                    val line = seq.firstOrNull { it.startsWith("cpu ") }
+                    if (line != null) return line
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(CPU_LOG_TAG, "direct /proc/stat read failed", e)
+        }
+        // Fallback via shell (non-root)
+        try {
+            val process = ProcessBuilder("sh", "-c", "cat /proc/stat").redirectErrorStream(true).start()
+            process.inputStream.bufferedReader().useLines { seq ->
+                val line = seq.firstOrNull { it.startsWith("cpu ") }
+                if (line != null) return line
+            }
+        } catch (e: Exception) {
+            Log.w(CPU_LOG_TAG, "shell cat /proc/stat failed", e)
+        }
+        return null
     }
 
     private fun updateGpuUsage() {
@@ -615,12 +647,26 @@ class MainActivity : AppCompatActivity() {
         return best
     }
 
-    private fun readFile(path: String): String? {
-        // Try direct read first
+    private fun readFileSafe(path: String): String? {
+        // Try direct read
         try {
             java.io.File(path).takeIf { it.exists() }?.let { return it.readText() }
         } catch (_: Exception) { }
-        return null
+
+        // Fallback: read via ProcessBuilder (no root)
+        return try {
+            val process = ProcessBuilder("cat", path).redirectErrorStream(true).start()
+            process.inputStream.bufferedReader().use { it.readText() }.takeIf { it.isNotBlank() }
+        } catch (_: Exception) { null }
+    }
+
+    // Backward compatibility for existing callers
+    private fun readFile(path: String): String? = readFileSafe(path)
+
+    companion object {
+        private const val CPU_LOG_TAG = "NothingXpertCPU"
+        @Volatile
+        private var lastCpuUsage: Int = -1
     }
 
     private fun formatBytes(bytes: Long): String {

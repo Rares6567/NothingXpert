@@ -107,6 +107,88 @@ class HookEntry : IXposedHookLoadPackage {
         }
     }
 
+    private fun startCpuReporter(lpparam: XC_LoadPackage.LoadPackageParam) {
+        try {
+            val at = Class.forName("android.app.ActivityThread")
+            val thread = XposedHelpers.callStaticMethod(at, "currentActivityThread")
+            val sysContext = XposedHelpers.callMethod(thread, "getSystemContext") as? Context ?: return
+            if (cpuReporterStarted) return
+            cpuReporterStarted = true
+            XposedBridge.log("NothingXpert: starting CPU reporter")
+            val handler = Handler(Looper.getMainLooper())
+            val runnable = object : Runnable {
+                override fun run() {
+                    try {
+                        val usage = sampleCpuUsage()
+                        if (usage != null) {
+                            android.provider.Settings.Global.putString(sysContext.contentResolver, "nothingxpert_cpu_usage", usage.toString())
+                        }
+                        val temp = readCpuTemp(sysContext)
+                        if (temp != null) {
+                            android.provider.Settings.Global.putString(sysContext.contentResolver, "nothingxpert_cpu_temp", temp.toString())
+                        }
+                    } catch (_: Throwable) { }
+                    handler.postDelayed(this, 2000)
+                }
+            }
+            handler.post(runnable)
+        } catch (t: Throwable) {
+            XposedBridge.log("NothingXpert: CPU reporter init failed: $t")
+        }
+    }
+
+    private fun sampleCpuUsage(): Int? {
+        val line = try {
+            java.io.File("/proc/stat").bufferedReader().useLines { seq ->
+                seq.firstOrNull { it.startsWith("cpu ") }
+            }
+        } catch (_: Throwable) { null } ?: return null
+        val parts = line.trim().split("\\s+".toRegex())
+        if (parts.size < 8) return null
+        val user = parts[1].toLongOrNull() ?: return null
+        val nice = parts[2].toLongOrNull() ?: return null
+        val system = parts[3].toLongOrNull() ?: return null
+        val idle = parts[4].toLongOrNull() ?: return null
+        val iowait = parts.getOrNull(5)?.toLongOrNull() ?: 0
+        val irq = parts.getOrNull(6)?.toLongOrNull() ?: 0
+        val softirq = parts.getOrNull(7)?.toLongOrNull() ?: 0
+        val steal = parts.getOrNull(8)?.toLongOrNull() ?: 0
+
+        val idleAll = idle + iowait
+        val nonIdle = user + nice + system + irq + softirq + steal
+        val total = idleAll + nonIdle
+
+        if (lastCpuTotal < 0 || lastCpuIdle < 0) {
+            lastCpuTotal = total
+            lastCpuIdle = idleAll
+            return null
+        }
+        val totalDiff = total - lastCpuTotal
+        val idleDiff = idleAll - lastCpuIdle
+        lastCpuTotal = total
+        lastCpuIdle = idleAll
+        if (totalDiff <= 0 || idleDiff < 0) return null
+        return (((totalDiff - idleDiff).toDouble() / totalDiff.toDouble()) * 100.0).toInt().coerceIn(0, 100)
+    }
+
+    private fun readCpuTemp(context: Context): Int? {
+        // try standard thermal zones
+        for (i in 0..120) {
+            val type = try {
+                java.io.File("/sys/class/thermal/thermal_zone$i/type").readText().trim().lowercase()
+            } catch (_: Throwable) { continue }
+            if (type.contains("cpu") || type.contains("cpuss") || type.contains("soc")) {
+                val raw = try {
+                    java.io.File("/sys/class/thermal/thermal_zone$i/temp").readText().trim()
+                } catch (_: Throwable) { continue }
+                val v = raw.toIntOrNull() ?: continue
+                val c = if (v > 1000 || v < -1000) v / 1000 else v
+                if (c in 0..120) return c
+            }
+        }
+        return null
+    }
+
     private fun registerScreenOffReset() {
         if (screenOffReceiverRegistered) return
         val ctx = currentApplication() ?: return
@@ -142,6 +224,7 @@ class HookEntry : IXposedHookLoadPackage {
         // Policy-level hooks live in system_server ("android" package).
         if (lpparam.packageName == "android") {
             installPolicyVolumeHooks(lpparam)
+            startCpuReporter(lpparam)
             return
         }
 
@@ -1271,6 +1354,15 @@ class HookEntry : IXposedHookLoadPackage {
 
         @Volatile
         private var screenOffReceiverRegistered: Boolean = false
+
+        @Volatile
+        private var cpuReporterStarted: Boolean = false
+
+        @Volatile
+        private var lastCpuTotal: Long = -1
+
+        @Volatile
+        private var lastCpuIdle: Long = -1
 
     }
 }
