@@ -845,12 +845,15 @@ class HookEntry : IXposedHookLoadPackage {
             XposedBridge.log("NothingXpert: interceptKeyBeforeQueueing hook failed: $t")
         }
 
+        // Dispatch-stage hook: try window-state signature first, then fallback to (KeyEvent,int)
+        var dispatchHooked = false
         try {
+            val wsClass = Class.forName("android.view.WindowManagerPolicy\$WindowState", false, lpparam.classLoader)
             XposedHelpers.findAndHookMethod(
                 PHONE_WINDOW_MANAGER_CLASS,
                 lpparam.classLoader,
                 "interceptKeyBeforeDispatching",
-                Class.forName("android.view.WindowManagerPolicy\$WindowState", false, lpparam.classLoader),
+                wsClass,
                 KeyEvent::class.java,
                 Int::class.javaPrimitiveType,
                 object : XC_MethodHook() {
@@ -861,16 +864,46 @@ class HookEntry : IXposedHookLoadPackage {
                         val ctx = XposedHelpers.getObjectField(pwm, "mContext") as? Context
                         runnableContext = ctx
                         if (handleVolumeForTracks(event, pm, ctx)) {
-                            XposedBridge.log("NothingXpert: interceptBeforeDispatch consumed")
-                            param.result = 0L // consume
+                            XposedBridge.log("NothingXpert: interceptBeforeDispatch consumed (WS)")
+                            param.result = 0L
                         }
                     }
                 }
             )
-            policyVolumeInstalled = true
+            dispatchHooked = true
         } catch (t: Throwable) {
-            XposedBridge.log("NothingXpert: policy volume hook failed: $t")
+            XposedBridge.log("NothingXpert: interceptKeyBeforeDispatching WS signature failed: $t")
         }
+
+        if (!dispatchHooked) {
+            try {
+                XposedHelpers.findAndHookMethod(
+                    PHONE_WINDOW_MANAGER_CLASS,
+                    lpparam.classLoader,
+                    "interceptKeyBeforeDispatching",
+                    KeyEvent::class.java,
+                    Int::class.javaPrimitiveType,
+                    object : XC_MethodHook() {
+                        override fun beforeHookedMethod(param: MethodHookParam) {
+                            val event = param.args.getOrNull(0) as? KeyEvent ?: return
+                            val pwm = param.thisObject
+                            val pm = XposedHelpers.getObjectField(pwm, "mPowerManager") as? PowerManager ?: return
+                            val ctx = XposedHelpers.getObjectField(pwm, "mContext") as? Context
+                            runnableContext = ctx
+                            if (handleVolumeForTracks(event, pm, ctx)) {
+                                XposedBridge.log("NothingXpert: interceptBeforeDispatch consumed (fallback)")
+                                param.result = 0L
+                            }
+                        }
+                    }
+                )
+                dispatchHooked = true
+            } catch (t: Throwable) {
+                XposedBridge.log("NothingXpert: interceptKeyBeforeDispatching fallback failed: $t")
+            }
+        }
+
+        if (dispatchHooked) policyVolumeInstalled = true
     }
 
     private fun tryStripFlagSecure(cl: ClassLoader, clazz: String, method: String) {
