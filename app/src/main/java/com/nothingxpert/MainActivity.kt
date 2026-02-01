@@ -165,6 +165,18 @@ class MainActivity : AppCompatActivity() {
                 restartSystemUI()
                 true
             }
+            R.id.action_open_lockscreen -> {
+                startActivity(Intent(this, SettingsActivity::class.java))
+                true
+            }
+            R.id.action_open_misc -> {
+                startActivity(Intent(this, MiscSettingsActivity::class.java))
+                true
+            }
+            R.id.action_about -> {
+                Toast.makeText(this, getString(R.string.about_message), Toast.LENGTH_SHORT).show()
+                true
+            }
             else -> super.onOptionsItemSelected(item)
         }
     }
