@@ -372,6 +372,9 @@ class HookEntry : IXposedHookLoadPackage {
             XposedBridge.log("NothingXpert: shuffle PIN hook failed: $t")
         }
 
+        // Install status bar double-tap-to-sleep hook
+        installStatusBarDoubleTapHook(lpparam)
+
         try {
             // Directly hook the double-tap listener on the lockscreen view.
             XposedHelpers.findAndHookMethod(
@@ -1364,5 +1367,89 @@ class HookEntry : IXposedHookLoadPackage {
         @Volatile
         private var lastCpuIdle: Long = -1
 
+    }
+
+    private fun installStatusBarDoubleTapHook(lpparam: XC_LoadPackage.LoadPackageParam) {
+        try {
+            // Try to find the PhoneStatusBarView class
+            val statusBarViewClass = try {
+                XposedHelpers.findClass(
+                    "com.android.systemui.statusbar.phone.PhoneStatusBarView",
+                    lpparam.classLoader
+                )
+            } catch (e: Throwable) {
+                // Fallback for different Android versions
+                try {
+                    XposedHelpers.findClass(
+                        "com.android.systemui.statusbar.phone.NotificationPanelView",
+                        lpparam.classLoader
+                    )
+                } catch (e2: Throwable) {
+                    XposedBridge.log("NothingXpert: Could not find status bar view class: $e")
+                    return
+                }
+            }
+
+            XposedBridge.log("NothingXpert: Hooking status bar view: ${statusBarViewClass.name}")
+
+            XposedHelpers.findAndHookMethod(
+                statusBarViewClass,
+                "onFinishInflate",
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        val statusBarView = param.thisObject as android.view.View
+                        val context = statusBarView.context
+
+                        // Create gesture detector for double-tap
+                        val gestureDetector = android.view.GestureDetector(
+                            context,
+                            object : android.view.GestureDetector.SimpleOnGestureListener() {
+                                override fun onDoubleTap(e: android.view.MotionEvent): Boolean {
+                                    if (isStatusBarDoubleTapEnabled()) {
+                                        XposedBridge.log("NothingXpert: Double tap detected on status bar")
+                                        
+                                        // Get tap position for fade animation
+                                        val x = e.x.toInt()
+                                        val y = e.y.toInt()
+                                        setTapPosition(x, y)
+                                        
+                                        // Sleep the device
+                                        val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
+                                        val uptime = android.os.SystemClock.uptimeMillis()
+                                        if (powerManager != null) {
+                                            tryGoToSleep(powerManager, uptime)
+                                        }
+                                        return true
+                                    }
+                                    return false
+                                }
+                            }
+                        )
+
+                        // Set touch listener for gesture detection
+                        statusBarView.setOnTouchListener { v, event ->
+                            gestureDetector.onTouchEvent(event)
+                            false  // Don't consume the event, let it propagate
+                        }
+
+                        XposedBridge.log("NothingXpert: Status bar double-tap hook installed")
+                    }
+                }
+            )
+        } catch (t: Throwable) {
+            XposedBridge.log("NothingXpert: Error installing status bar double-tap hook: $t")
+        }
+    }
+
+    private fun isStatusBarDoubleTapEnabled(): Boolean {
+        return try {
+            val prefs = XSharedPreferences(MODULE_PKG, "com.nothingxpert_preferences")
+            prefs.makeWorldReadable()
+            prefs.reload()
+            prefs.getBoolean("pref_status_bar_double_tap_sleep", false)
+        } catch (t: Throwable) {
+            XposedBridge.log("NothingXpert: Error reading status bar double tap preference: $t")
+            false
+        }
     }
 }

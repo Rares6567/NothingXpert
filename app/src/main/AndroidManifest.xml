@@ -51,6 +51,11 @@
             android:label="@string/pref_category_misc" />
 
         <activity
+            android:name=".StatusBarSettingsActivity"
+            android:exported="false"
+            android:label="@string/pref_category_status_bar" />
+
+        <activity
             android:name=".AppsActivity"
             android:exported="false"
             android:label="@string/pref_category_apps" />
