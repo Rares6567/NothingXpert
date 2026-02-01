@@ -338,10 +338,31 @@ class MainActivity : AppCompatActivity() {
         gpuValue = findViewById(R.id.gpu_value)
         sectionMain = findViewById(R.id.section_main)
         sectionOptions = findViewById(R.id.section_options)
+        
+        // Initial static update (no loop)
         updateRamUsage()
         updateGpuUsage()
-        // Kick off update loop
-        ramHandler.postDelayed(ramUpdateRunnable, 1000)
+    }
+    
+    override fun onResume() {
+        super.onResume()
+        if (isMainTabSelected) {
+            startResourceMonitor(2000)
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        stopResourceMonitor()
+    }
+
+    private fun startResourceMonitor(delay: Long) {
+        stopResourceMonitor() // Ensure no duplicates
+        ramHandler.postDelayed(ramUpdateRunnable, delay)
+    }
+
+    private fun stopResourceMonitor() {
+        ramHandler.removeCallbacks(ramUpdateRunnable)
     }
 
     private fun setupTabBar() {
@@ -373,8 +394,6 @@ class MainActivity : AppCompatActivity() {
             prefs.edit().putBoolean("pref_amoled_theme", switchAmoled.isChecked).apply()
             recreate()
         }
-
-        selectTab(true)
     }
 
     private fun selectTab(main: Boolean) {
@@ -389,6 +408,13 @@ class MainActivity : AppCompatActivity() {
         // No pill; just color emphasis
         animateTextColor(tabMain, if (main) selectedColor else unselectedColor)
         animateTextColor(tabOptions, if (!main) selectedColor else unselectedColor)
+        
+        // Manage resource updates based on tab
+        if (main) {
+            startResourceMonitor(500) // Wait for animation
+        } else {
+            stopResourceMonitor()
+        }
     }
 
     private fun getThemeColor(attr: Int): Int {
