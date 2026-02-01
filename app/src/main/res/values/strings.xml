@@ -29,7 +29,4 @@
     <string name="cpu_monitor_format">CPU: %1$d%% (%2$s)</string>
     <string name="gpu_monitor_placeholder">GPU: --%% (--°C)</string>
     <string name="gpu_monitor_format">GPU: %1$s (%2$s)</string>
-
-    <!-- Menu items -->
-    <string name="about_message">NothingXpert module for NothingOS tweaks</string>
 </resources>

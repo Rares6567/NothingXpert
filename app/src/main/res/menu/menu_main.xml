@@ -6,19 +6,4 @@
         android:icon="@drawable/ic_restart"
         android:title="@string/restart_systemui"
         app:showAsAction="always" />
-
-    <item
-        android:id="@+id/action_open_lockscreen"
-        android:title="@string/pref_category_lockscreen"
-        app:showAsAction="never" />
-
-    <item
-        android:id="@+id/action_open_misc"
-        android:title="@string/pref_category_misc"
-        app:showAsAction="never" />
-
-    <item
-        android:id="@+id/action_about"
-        android:title="@string/about_message"
-        app:showAsAction="never" />
 </menu>
