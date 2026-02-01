@@ -97,6 +97,14 @@
                         android:id="@+id/category_misc"
                         layout="@layout/item_category_card"
                         android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="16dp" />
+
+                    <!-- Apps Category -->
+                    <include
+                        android:id="@+id/category_apps"
+                        layout="@layout/item_category_card"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content" />
 
                     <!-- System Monitor (minimal NothingOS style) -->

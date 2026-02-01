@@ -2,6 +2,17 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.nothingxpert">
 
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <uses-permission android:name="android.permission.USE_FINGERPRINT" />
+
+    <!-- Allow listing launcher apps for App Lock picker -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
     <application
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
@@ -38,6 +49,26 @@
             android:name=".MiscSettingsActivity"
             android:exported="false"
             android:label="@string/pref_category_misc" />
+
+        <activity
+            android:name=".AppsActivity"
+            android:exported="false"
+            android:label="@string/pref_category_apps" />
+
+        <activity
+            android:name=".AppLockSettingsActivity"
+            android:exported="false"
+            android:label="@string/pref_category_apps" />
+
+        <activity
+            android:name=".LockScreenActivity"
+            android:exported="true"
+            android:theme="@style/Theme.AppCompat.NoActionBar"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:launchMode="singleTop"
+            android:taskAffinity="com.nothingxpert.lock"
+            android:finishOnTaskLaunch="true" />
 
     </application>
 </manifest>

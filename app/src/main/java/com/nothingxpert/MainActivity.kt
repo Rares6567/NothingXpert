@@ -114,6 +114,7 @@ class MainActivity : AppCompatActivity() {
 
         setupLockScreenCategory()
         setupMiscCategory()
+        setupAppsCategory()
         setupRamMonitor()
         setupTabBar()
         
@@ -180,12 +181,15 @@ class MainActivity : AppCompatActivity() {
     private fun animateCardsOnStartup() {
         val lockscreenCard = findViewById<View>(R.id.category_lockscreen)
         val miscCard = findViewById<View>(R.id.category_misc)
+        val appsCard = findViewById<View>(R.id.category_apps)
         
         // Start with invisible
         lockscreenCard.alpha = 0f
         lockscreenCard.translationY = 50f
         miscCard.alpha = 0f
         miscCard.translationY = 50f
+        appsCard.alpha = 0f
+        appsCard.translationY = 50f
         
         // Animate lockscreen card
         lockscreenCard.animate()
@@ -202,6 +206,15 @@ class MainActivity : AppCompatActivity() {
             .translationY(0f)
             .setDuration(400)
             .setStartDelay(350)
+            .setInterpolator(android.view.animation.DecelerateInterpolator())
+            .start()
+
+        // Animate apps card with further stagger
+        appsCard.animate()
+            .alpha(1f)
+            .translationY(0f)
+            .setDuration(400)
+            .setStartDelay(450)
             .setInterpolator(android.view.animation.DecelerateInterpolator())
             .start()
     }
@@ -254,7 +267,7 @@ class MainActivity : AppCompatActivity() {
         titleView.text = getString(R.string.pref_category_lockscreen).uppercase()
         
         val summaryView = categoryView.findViewById<TextView>(R.id.category_summary)
-        summaryView.text = getString(R.string.lockscreen_category_summary)
+        summaryView.visibility = View.GONE
         
         // Click listener to open settings with animation
         categoryView.setOnClickListener {
@@ -281,11 +294,39 @@ class MainActivity : AppCompatActivity() {
         titleView.text = getString(R.string.pref_category_misc).uppercase()
         
         val summaryView = categoryView.findViewById<TextView>(R.id.category_summary)
-        summaryView.text = getString(R.string.misc_category_summary)
+        summaryView.visibility = View.GONE
         
         // Click listener to open misc settings with animation
         categoryView.setOnClickListener {
             startActivity(Intent(this, MiscSettingsActivity::class.java))
+            overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
+        }
+    }
+
+    private fun setupAppsCategory() {
+        val categoryView = findViewById<View>(R.id.category_apps)
+        
+        // Set icon
+        val iconView = categoryView.findViewById<ImageView>(R.id.category_icon)
+        iconView.setImageResource(R.drawable.ic_settings_apps)
+        
+        // Reuse Misc colors for consistency for now
+        val bgTint = ContextCompat.getColor(this, R.color.main_preference_color_2)
+        val iconTint = ContextCompat.getColor(this, R.color.main_preference_on_color_2)
+        
+        iconView.background.setTintList(ColorStateList.valueOf(bgTint))
+        iconView.imageTintList = ColorStateList.valueOf(iconTint)
+        
+        // Set title and summary
+        val titleView = categoryView.findViewById<TextView>(R.id.category_title)
+        titleView.text = getString(R.string.pref_category_apps).uppercase()
+        
+        val summaryView = categoryView.findViewById<TextView>(R.id.category_summary)
+        summaryView.visibility = View.GONE
+        
+        // Click listener -> Apps hub
+        categoryView.setOnClickListener {
+            startActivity(Intent(this, AppsActivity::class.java))
             overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
         }
     }

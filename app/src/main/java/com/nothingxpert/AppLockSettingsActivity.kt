@@ -1,0 +1,81 @@
+package com.nothingxpert
+
+import android.os.Bundle
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.updatePadding
+import com.google.android.material.appbar.AppBarLayout
+import com.google.android.material.appbar.MaterialToolbar
+
+class AppLockSettingsActivity : AppCompatActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        // Apply AMOLED theme if enabled
+        val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
+        if (prefs.getBoolean("pref_amoled_theme", false)) {
+            setTheme(R.style.Theme_NothingXpert_Amoled)
+        }
+        super.onCreate(savedInstanceState)
+        
+        // Enable edge-to-edge display
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        
+        setContentView(R.layout.activity_settings) // Reuse settings layout
+
+        // Handle status bar insets
+        val appBar = findViewById<AppBarLayout>(R.id.appbar)
+        ViewCompat.setOnApplyWindowInsetsListener(appBar) { view, insets ->
+            val statusBarInsets = insets.getInsets(WindowInsetsCompat.Type.statusBars())
+            view.updatePadding(top = statusBarInsets.top)
+            insets
+        }
+
+        val toolbar: MaterialToolbar = findViewById(R.id.toolbar)
+        toolbar.title = getString(R.string.pref_category_apps)
+        setSupportActionBar(toolbar)
+        supportActionBar?.setDisplayHomeAsUpEnabled(true)
+
+        if (savedInstanceState == null) {
+            supportFragmentManager
+                .beginTransaction()
+                .replace(R.id.settings_container, AppLockSettingsFragment())
+                .commit()
+        }
+    }
+
+    override fun onCreateOptionsMenu(menu: android.view.Menu): Boolean {
+        menuInflater.inflate(R.menu.menu_app_lock, menu)
+        return true
+    }
+
+    override fun onOptionsItemSelected(item: android.view.MenuItem): Boolean {
+        val frag = supportFragmentManager.findFragmentById(R.id.settings_container) as? AppLockSettingsFragment
+        return when (item.itemId) {
+            android.R.id.home -> {
+                onSupportNavigateUp()
+                true
+            }
+            R.id.action_sort -> {
+                frag?.toggleSort()
+                true
+            }
+            R.id.action_filter -> {
+                frag?.toggleFilter()
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
+        }
+    }
+
+    override fun onSupportNavigateUp(): Boolean {
+        finish()
+        overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right)
+        return true
+    }
+
+    override fun onBackPressed() {
+        super.onBackPressed()
+        overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right)
+    }
+}

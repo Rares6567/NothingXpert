@@ -17,6 +17,12 @@
     <string name="pref_allow_secure_summary">Remove the secure flag so screenshots and screen recordings work where blocked</string>
     <string name="pref_shake_torch_title">Shake to toggle flashlight</string>
     <string name="pref_shake_torch_summary">Shake the phone when the screen is off to turn the flashlight on or off</string>
+    <string name="app_lock_title">App Lock</string>
+    <string name="app_lock_summary">Pick which apps should ask for unlock</string>
+    <string name="app_lock_sort">Sort</string>
+    <string name="app_lock_filter">Filter</string>
+    <string name="app_lock_filter_all">Showing all apps</string>
+    <string name="app_lock_filter_locked">Showing locked apps only</string>
     <string name="pref_category_remap_buttons">Remap Buttons</string>
     <string name="pref_volume_up_action_title">Volume up long-press</string>
     <string name="pref_volume_down_action_title">Volume down long-press</string>
@@ -35,8 +41,11 @@
     <!-- Bottom tabs / Options sheet -->
     <string name="tab_main">Main</string>
     <string name="tab_options">Options</string>
+    <string name="pref_category_apps">Apps</string>
+    <string name="apps_category_summary">App Lock and other app-specific tweaks</string>
     <string name="options_menu_title">Options</string>
     <string name="options_menu_subtitle">Quick access to sections</string>
     <string name="option_amoled_title">AMOLED Theme</string>
     <string name="option_amoled_summary">Use pitch black background</string>
+    <string name="app_lock_button">App Lock</string>
 </resources>
