@@ -11,6 +11,11 @@ import com.google.android.material.appbar.MaterialToolbar
 
 class SettingsActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Apply AMOLED theme if enabled
+        val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
+        if (prefs.getBoolean("pref_amoled_theme", false)) {
+            setTheme(R.style.Theme_NothingXpert_Amoled)
+        }
         super.onCreate(savedInstanceState)
         
         // Enable edge-to-edge display

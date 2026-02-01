@@ -15,6 +15,8 @@
     <string name="misc_category_summary">Other tweaks and customizations</string>
     <string name="pref_allow_secure_title">Allow screenshots from restricted content</string>
     <string name="pref_allow_secure_summary">Remove the secure flag so screenshots and screen recordings work where blocked</string>
+    <string name="pref_shake_torch_title">Shake to toggle flashlight</string>
+    <string name="pref_shake_torch_summary">Shake the phone when the screen is off to turn the flashlight on or off</string>
     <string name="pref_category_remap_buttons">Remap Buttons</string>
     <string name="pref_volume_up_action_title">Volume up long-press</string>
     <string name="pref_volume_down_action_title">Volume down long-press</string>

@@ -18,6 +18,7 @@ import android.widget.TextView
 import de.robv.android.xposed.XSharedPreferences
 import kotlin.math.abs
 import kotlin.math.min
+import kotlin.math.sqrt
 import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
@@ -33,6 +34,65 @@ class HookEntry : IXposedHookLoadPackage {
             val ok = executeVolumeAction(action, runnableContext)
             XposedBridge.log("NothingXpert: skipUpRunnable fired action=$action ok=$ok")
             if (ok) skipUpSent = true
+        }
+    }
+
+    private fun registerShakeTorch(context: Context) {
+        if (shakeListenerRegistered) return
+        try {
+            val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as? android.hardware.SensorManager ?: return
+            val accel = sensorManager.getDefaultSensor(android.hardware.Sensor.TYPE_ACCELEROMETER) ?: return
+            val prox = sensorManager.getDefaultSensor(android.hardware.Sensor.TYPE_PROXIMITY)
+            val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return
+
+            val listener = object : android.hardware.SensorEventListener {
+                private val gravity = FloatArray(3)
+                override fun onAccuracyChanged(sensor: android.hardware.Sensor?, accuracy: Int) {}
+                override fun onSensorChanged(event: android.hardware.SensorEvent) {
+                    if (!isShakeTorchEnabled()) return
+                    if (pm.isInteractive) return // only when screen off
+                    if (isProximityNear) return // avoid in pocket or face-down close
+                    val alpha = 0.8f
+                    gravity[0] = alpha * gravity[0] + (1 - alpha) * event.values[0]
+                    gravity[1] = alpha * gravity[1] + (1 - alpha) * event.values[1]
+                    gravity[2] = alpha * gravity[2] + (1 - alpha) * event.values[2]
+
+                    val linearX = event.values[0] - gravity[0]
+                    val linearY = event.values[1] - gravity[1]
+                    val linearZ = event.values[2] - gravity[2]
+
+                    val magnitude = kotlin.math.sqrt(
+                        linearX * linearX + linearY * linearY + linearZ * linearZ
+                    )
+                    val now = SystemClock.uptimeMillis()
+                    if (magnitude > SHAKE_THRESHOLD && now - lastShakeTs > SHAKE_COOLDOWN_MS) {
+                        lastShakeTs = now
+                        toggleFlashlight(context)
+                    }
+                }
+            }
+            sensorManager.registerListener(
+                listener,
+                accel,
+                android.hardware.SensorManager.SENSOR_DELAY_GAME
+            )
+            if (prox != null) {
+                sensorManager.registerListener(
+                    object : android.hardware.SensorEventListener {
+                        override fun onAccuracyChanged(sensor: android.hardware.Sensor?, accuracy: Int) {}
+                        override fun onSensorChanged(event: android.hardware.SensorEvent) {
+                            val v = event.values.firstOrNull() ?: return
+                            isProximityNear = v < prox.maximumRange
+                        }
+                    },
+                    prox,
+                    android.hardware.SensorManager.SENSOR_DELAY_NORMAL
+                )
+            }
+            shakeListenerRegistered = true
+            XposedBridge.log("NothingXpert: shake torch listener registered")
+        } catch (t: Throwable) {
+            XposedBridge.log("NothingXpert: failed to register shake listener: $t")
         }
     }
 
@@ -139,7 +199,10 @@ class HookEntry : IXposedHookLoadPackage {
                     override fun afterHookedMethod(param: MethodHookParam) {
                         Log.i(LOG_TAG, "SystemUIApplication.onCreate hooked")
                         XposedBridge.log("NothingXpert: SystemUIApplication.onCreate hooked")
-                        (param.thisObject as? Context)?.let { runnableContext = it.applicationContext }
+                        (param.thisObject as? Context)?.let { ctx ->
+                            runnableContext = ctx.applicationContext
+                            registerShakeTorch(ctx.applicationContext)
+                        }
                     }
                 }
             )
@@ -796,6 +859,22 @@ class HookEntry : IXposedHookLoadPackage {
         return prefs.getBoolean(PREF_SHUFFLE_PIN, false)
     }
 
+    private fun isShakeTorchEnabled(): Boolean {
+        try {
+            val file = java.io.File("/data/user_de/0/$MODULE_PKG/shared_prefs/${MODULE_PKG}_preferences.xml")
+            val xsp = if (file.exists()) XSharedPreferences(file) else XSharedPreferences(MODULE_PKG, "${MODULE_PKG}_preferences")
+            xsp.makeWorldReadable()
+            if (xsp.hasFileChanged()) xsp.reload()
+            if (xsp.contains(PREF_SHAKE_TORCH)) {
+                return xsp.getBoolean(PREF_SHAKE_TORCH, false)
+            }
+        } catch (_: Throwable) {
+        }
+        val app = currentApplication() ?: return false
+        val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(app)
+        return prefs.getBoolean(PREF_SHAKE_TORCH, false)
+    }
+
     private fun getVolumeUpAction(): Int {
         try {
             val file = java.io.File("/data/user_de/0/$MODULE_PKG/shared_prefs/${MODULE_PKG}_preferences.xml")
@@ -987,8 +1066,11 @@ class HookEntry : IXposedHookLoadPackage {
         const val PREF_VOLUME_UP_ACTION = "pref_volume_up_action"
         const val PREF_VOLUME_DOWN_ACTION = "pref_volume_down_action"
         const val PREF_SHUFFLE_PIN = "pref_shuffle_pin"
+        const val PREF_SHAKE_TORCH = "pref_shake_torch"
         const val ENABLE_DOUBLE_TAP = false
         const val VOLUME_LONG_PRESS_DELAY_MS = 350L
+        const val SHAKE_THRESHOLD = 19.5f
+        const val SHAKE_COOLDOWN_MS = 1500L
         
         // Volume action constants (matching PixelXpert)
         const val ACTION_NONE = -1
@@ -1021,6 +1103,15 @@ class HookEntry : IXposedHookLoadPackage {
 
         @Volatile
         private var flashlightOn: Boolean = false
+
+        @Volatile
+        private var shakeListenerRegistered: Boolean = false
+
+        @Volatile
+        private var lastShakeTs: Long = 0L
+
+        @Volatile
+        private var isProximityNear: Boolean = false
 
     }
 }
