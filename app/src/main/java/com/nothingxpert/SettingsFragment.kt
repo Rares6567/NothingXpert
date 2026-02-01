@@ -12,6 +12,7 @@ class SettingsFragment : PreferenceFragmentCompat(), SharedPreferences.OnSharedP
         preferenceManager.sharedPreferencesName = "${requireContext().packageName}_preferences"
         setPreferencesFromResource(R.xml.preferences, rootKey)
         makePrefsReadable(requireContext())
+        PrefsUtil.makeWorldReadable(requireContext())
     }
 
     override fun onResume() {
@@ -25,19 +26,14 @@ class SettingsFragment : PreferenceFragmentCompat(), SharedPreferences.OnSharedP
     }
 
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
-        makePrefsReadable(requireContext())
+        // Delay to allow async apply() to write file, then fix permissions
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            if (isAdded) PreferenceUtils.fixPermissions(requireContext())
+        }, 100)
     }
 
     private fun makePrefsReadable(context: Context) {
-        val name = "${context.packageName}_preferences"
-        val prefsDir = File(context.applicationInfo.dataDir, "shared_prefs")
-        val prefsFile = File(prefsDir, "$name.xml")
-        try {
-            prefsDir.setReadable(true, false)
-            prefsDir.setExecutable(true, false)
-            prefsFile.setReadable(true, false)
-        } catch (_: Throwable) {
-            // best effort; ignore
-        }
+        PreferenceUtils.fixPermissions(context)
+        PrefsUtil.makeWorldReadable(context)
     }
 }

@@ -1050,71 +1050,19 @@ class HookEntry : IXposedHookLoadPackage {
     }
 
     private fun isSingleTapEnabled(): Boolean {
-        // Try module preference first (works even if SystemUI process lacks direct app context).
-        try {
-            val file = java.io.File("/data/user_de/0/$MODULE_PKG/shared_prefs/${MODULE_PKG}_preferences.xml")
-            val xsp = if (file.exists()) XSharedPreferences(file) else XSharedPreferences(MODULE_PKG, "${MODULE_PKG}_preferences")
-            xsp.makeWorldReadable()
-            if (xsp.hasFileChanged()) xsp.reload()
-            if (xsp.contains(PREF_SINGLE_TAP)) {
-                return xsp.getBoolean(PREF_SINGLE_TAP, true)
-            }
-        } catch (_: Throwable) {
-            // ignore and fall back
-        }
-
-        val app = currentApplication() ?: return true
-        val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(app)
-        return prefs.getBoolean(PREF_SINGLE_TAP, true)
+        return getPreferenceBoolean(PREF_SINGLE_TAP, false)
     }
 
     private fun isAllowSecureScreenshots(): Boolean {
-        // XSharedPreferences to read across processes
-        try {
-            val file = java.io.File("/data/user_de/0/$MODULE_PKG/shared_prefs/${MODULE_PKG}_preferences.xml")
-            val xsp = if (file.exists()) XSharedPreferences(file) else XSharedPreferences(MODULE_PKG, "${MODULE_PKG}_preferences")
-            xsp.makeWorldReadable()
-            if (xsp.hasFileChanged()) xsp.reload()
-            if (xsp.contains(PREF_ALLOW_SECURE)) {
-                return xsp.getBoolean(PREF_ALLOW_SECURE, false)
-            }
-        } catch (_: Throwable) {
-        }
-        val app = currentApplication() ?: return false
-        val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(app)
-        return prefs.getBoolean(PREF_ALLOW_SECURE, false)
+        return getPreferenceBoolean(PREF_ALLOW_SECURE, false)
     }
 
     private fun isShufflePinEnabled(): Boolean {
-        try {
-            val file = java.io.File("/data/user_de/0/$MODULE_PKG/shared_prefs/${MODULE_PKG}_preferences.xml")
-            val xsp = if (file.exists()) XSharedPreferences(file) else XSharedPreferences(MODULE_PKG, "${MODULE_PKG}_preferences")
-            xsp.makeWorldReadable()
-            if (xsp.hasFileChanged()) xsp.reload()
-            if (xsp.contains(PREF_SHUFFLE_PIN)) {
-                return xsp.getBoolean(PREF_SHUFFLE_PIN, false)
-            }
-        } catch (_: Throwable) {
-        }
-        val app = currentApplication() ?: return false
-        val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(app)
-        return prefs.getBoolean(PREF_SHUFFLE_PIN, false)
+        return getPreferenceBoolean(PREF_SHUFFLE_PIN, false)
     }
 
     private fun isShakeTorchEnabled(): Boolean {
-        try {
-            val file = java.io.File("/data/user_de/0/$MODULE_PKG/shared_prefs/${MODULE_PKG}_preferences.xml")
-            val xsp = if (file.exists()) XSharedPreferences(file) else XSharedPreferences(MODULE_PKG, "${MODULE_PKG}_preferences")
-            xsp.makeWorldReadable()
-            if (xsp.hasFileChanged()) xsp.reload()
-            if (xsp.contains(PREF_SHAKE_TORCH)) {
-                return xsp.getBoolean(PREF_SHAKE_TORCH, false)
-            }
-        } catch (_: Throwable) {
-        }
-        val app = currentApplication() ?: return false
-        val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(app)
-        return prefs.getBoolean(PREF_SHAKE_TORCH, false)
+        return getPreferenceBoolean(PREF_SHAKE_TORCH, false)
     }
 
     private fun getVolumeUpAction(): Int {
@@ -1442,14 +1390,30 @@ class HookEntry : IXposedHookLoadPackage {
     }
 
     private fun isStatusBarDoubleTapEnabled(): Boolean {
-        return try {
-            val prefs = XSharedPreferences(MODULE_PKG, "com.nothingxpert_preferences")
+        return getPreferenceBoolean("pref_status_bar_double_tap_sleep", false)
+    }
+
+    private fun getPreferenceBoolean(key: String, defValue: Boolean): Boolean {
+        try {
+            // Strategy 1: Standard XSharedPreferences
+            val prefs = XSharedPreferences(MODULE_PKG, "${MODULE_PKG}_preferences")
             prefs.makeWorldReadable()
-            prefs.reload()
-            prefs.getBoolean("pref_status_bar_double_tap_sleep", false)
+            if (prefs.hasFileChanged()) prefs.reload()
+            if (prefs.contains(key)) return prefs.getBoolean(key, defValue)
+            
         } catch (t: Throwable) {
-            XposedBridge.log("NothingXpert: Error reading status bar double tap preference: $t")
-            false
+             XposedBridge.log("NothingXpert: Error reading pref $key: $t")
         }
+
+        // Strategy 3: Fallback to app context
+        try {
+            val app = currentApplication() 
+            if (app != null) {
+                val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(app)
+                if (prefs.contains(key)) return prefs.getBoolean(key, defValue)
+            }
+        } catch (_: Throwable) { }
+
+        return defValue
     }
 }

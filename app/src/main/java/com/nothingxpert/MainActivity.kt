@@ -3,6 +3,8 @@ package com.nothingxpert
 import android.animation.ArgbEvaluator
 import android.animation.ValueAnimator
 import android.app.ActivityManager
+import android.app.AlarmManager
+import android.app.PendingIntent
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Color
@@ -27,17 +29,23 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updatePadding
 import com.google.android.material.appbar.AppBarLayout
 import java.io.DataOutputStream
+import kotlin.system.exitProcess
 
 class MainActivity : AppCompatActivity() {
     private val ramHandler = Handler(Looper.getMainLooper())
+    private val mainHandler = Handler(Looper.getMainLooper())
     private val ramUpdateRunnable = object : Runnable {
         override fun run() {
-            updateRamUsage()
-            updateCpuUsage()
-            updateGpuUsage()
-            ramHandler.postDelayed(this, 1000) // faster updates
+            // Update only while main tab stays visible
+            if (isMainTabSelected && lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) {
+                updateRamUsage()
+                updateCpuUsage()
+                updateGpuUsage()
+                ramHandler.postDelayed(this, 1000)
+            }
         }
     }
+    private var gateRunnable: Runnable? = null
 
     private lateinit var ramValue: TextView
     private lateinit var cpuValue: TextView
@@ -52,6 +60,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var gestureDetector: android.view.GestureDetector
     private var isMainTabSelected = true
+    @Volatile private var restarting = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // Apply AMOLED theme if enabled
@@ -66,6 +75,9 @@ class MainActivity : AppCompatActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         
         setContentView(R.layout.activity_main)
+
+        // Keep prefs readable for LSPosed after recreates/theme toggles
+        PrefsUtil.ensurePrefsAccessible(this)
 
         // Set up toolbar
         val toolbar = findViewById<Toolbar>(R.id.toolbar)
@@ -258,9 +270,37 @@ class MainActivity : AppCompatActivity() {
             os.flush()
             os.close()
             process.waitFor()
-            Toast.makeText(this, "SystemUI restarted", Toast.LENGTH_SHORT).show()
+            // Schedule app auto-restart in background, then kill this process
+            PrefsUtil.ensurePrefsAccessible(this)
+            scheduleSelfRestart(1200)
+            Toast.makeText(this, "SystemUI restarting…", Toast.LENGTH_SHORT).show()
+            finishAffinity()
+            android.os.Process.killProcess(android.os.Process.myPid())
+            exitProcess(0)
         } catch (e: Exception) {
             Toast.makeText(this, "Failed to restart SystemUI: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun scheduleSelfRestart(delayMs: Long) {
+        try {
+            val ctx = applicationContext
+            val intent = ctx.packageManager.getLaunchIntentForPackage(packageName)
+                ?: Intent(ctx, MainActivity::class.java)
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+            val pi = PendingIntent.getActivity(
+                ctx,
+                9991,
+                intent,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_CANCEL_CURRENT
+            )
+            val am = ctx.getSystemService(AlarmManager::class.java)
+            am?.setExact(
+                AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                android.os.SystemClock.elapsedRealtime() + delayMs,
+                pi
+            )
+        } catch (_: Throwable) {
         }
     }
 
@@ -388,7 +428,7 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         if (isMainTabSelected) {
-            startResourceMonitor(2000)
+            startResourceMonitor()
         }
     }
 
@@ -397,13 +437,22 @@ class MainActivity : AppCompatActivity() {
         stopResourceMonitor()
     }
 
-    private fun startResourceMonitor(delay: Long) {
+    private fun startResourceMonitor() {
         stopResourceMonitor() // Ensure no duplicates
-        ramHandler.postDelayed(ramUpdateRunnable, delay)
+        val gate = Runnable {
+            // Only start if still on main after the gate window
+            if (isMainTabSelected && lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) {
+                ramHandler.post(ramUpdateRunnable)
+            }
+        }
+        gateRunnable = gate
+        ramHandler.postDelayed(gate, 2000) // begin updates only after 2s on main
     }
 
     private fun stopResourceMonitor() {
         ramHandler.removeCallbacks(ramUpdateRunnable)
+        gateRunnable?.let { ramHandler.removeCallbacks(it) }
+        gateRunnable = null
     }
 
     private fun setupTabBar() {
@@ -416,24 +465,40 @@ class MainActivity : AppCompatActivity() {
         // Setup AMOLED switch
         val switchAmoled = findViewById<com.google.android.material.materialswitch.MaterialSwitch>(R.id.switch_amoled)
         val cardAmoled = findViewById<View>(R.id.card_amoled)
+        val switchBoot = findViewById<com.google.android.material.materialswitch.MaterialSwitch>(R.id.switch_boot)
+        val cardBoot = findViewById<View>(R.id.card_boot)
         
         val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
         switchAmoled.isChecked = prefs.getBoolean("pref_amoled_theme", false)
+        switchBoot.isChecked = prefs.getBoolean("pref_launch_on_boot", false)
         
         val toggleListener = { _: View ->
             val newState = !switchAmoled.isChecked
             switchAmoled.isChecked = newState
-            prefs.edit().putBoolean("pref_amoled_theme", newState).apply()
-            // Recreate to apply theme
-            recreate()
+            prefs.edit().putBoolean("pref_amoled_theme", newState).commit()
+            PrefsUtil.ensurePrefsAccessible(this)
+            scheduleRestartSelf()
         }
         
         // Toggle on card click
         cardAmoled.setOnClickListener(toggleListener)
         // Toggle on switch click (override default to handle recreation)
         switchAmoled.setOnClickListener { 
-            prefs.edit().putBoolean("pref_amoled_theme", switchAmoled.isChecked).apply()
-            recreate()
+            prefs.edit().putBoolean("pref_amoled_theme", switchAmoled.isChecked).commit()
+            PrefsUtil.ensurePrefsAccessible(this)
+            scheduleRestartSelf()
+        }
+
+        val bootToggleListener = { _: View ->
+            val newState = !switchBoot.isChecked
+            switchBoot.isChecked = newState
+            prefs.edit().putBoolean("pref_launch_on_boot", newState).commit()
+            PrefsUtil.ensurePrefsAccessible(this)
+        }
+        cardBoot.setOnClickListener(bootToggleListener)
+        switchBoot.setOnClickListener { 
+            prefs.edit().putBoolean("pref_launch_on_boot", switchBoot.isChecked).commit()
+            PrefsUtil.ensurePrefsAccessible(this)
         }
     }
 
@@ -452,7 +517,7 @@ class MainActivity : AppCompatActivity() {
         
         // Manage resource updates based on tab
         if (main) {
-            startResourceMonitor(500) // Wait for animation
+            startResourceMonitor() // gated start
         } else {
             stopResourceMonitor()
         }
@@ -729,6 +794,21 @@ class MainActivity : AppCompatActivity() {
 
     // Backward compatibility for existing callers
     private fun readFile(path: String): String? = readFileSafe(path)
+
+    private fun scheduleRestartSelf() {
+        if (restarting) return
+        restarting = true
+        stopResourceMonitor()
+        // Ensure prefs are synced before relaunch so LSPosed picks up changes
+        PrefsUtil.ensurePrefsAccessible(this)
+        mainHandler.postDelayed({
+            val launch = Intent(this, MainActivity::class.java)
+            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+            startActivity(launch)
+            overridePendingTransition(0, 0)
+            finish()
+        }, 200) // small delay to let IO finish
+    }
 
     companion object {
         private const val CPU_LOG_TAG = "NothingXpertCPU"

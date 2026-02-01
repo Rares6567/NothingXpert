@@ -95,17 +95,17 @@ class AppLockSettingsFragment : Fragment() {
                     fullList = appList
                     adapter = AppLockAdapter(appList, lockedSet.toMutableSet()) { pkg, isLocked ->
                         val currentSet = prefs.getStringSet(PREF_LOCKED_PACKAGES, emptySet())?.toMutableSet() ?: mutableSetOf()
-                        if (isLocked) {
-                            currentSet.add(pkg)
-                        } else {
-                            currentSet.remove(pkg)
-                        }
-                        prefs.edit().putStringSet(PREF_LOCKED_PACKAGES, currentSet).apply()
-                        // Ensure file permissions (chmod) if needed, but managing via XSharedPreferences usually works if path is standard
-                    }
-                    recyclerView.adapter = adapter
-                    progressBar.visibility = View.GONE
-                    recyclerView.visibility = View.VISIBLE
+                if (isLocked) {
+                    currentSet.add(pkg)
+                } else {
+                    currentSet.remove(pkg)
+                }
+                prefs.edit().putStringSet(PREF_LOCKED_PACKAGES, currentSet).commit()
+                PrefsUtil.ensurePrefsAccessible(requireContext())
+            }
+            recyclerView.adapter = adapter
+            progressBar.visibility = View.GONE
+            recyclerView.visibility = View.VISIBLE
                 }
             }
         }.start()

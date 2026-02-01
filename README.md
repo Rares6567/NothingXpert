@@ -12,7 +12,11 @@ A small LSPosed/Xposed module that adds useful features to your Nothing Phone wi
 
 <img width="1080" height="2412" alt="Screenshot_20260201-154550" src="https://github.com/user-attachments/assets/144e3c1f-40b8-49a0-a253-a703cb593972" />
 
-**Features**
+
+**Bugs**
+* After toggling AMOLED Theme you would have to close and reopen the app
+  
+**_Features_**
 
 **Lock Screen**
 * Single tap to sleep – Tap the lock screen to turn the display off
