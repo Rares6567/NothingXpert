@@ -332,28 +332,36 @@ class HookEntry : IXposedHookLoadPackage {
             XposedBridge.log("NothingXpert: SystemUIApplication hook failed: $t")
         }
 
-        try {
-            // Ensure double-tap detection is enabled on the lockscreen TouchHandlingView.
-            XposedHelpers.findAndHookMethod(
-                TOUCH_HANDLING_VIEW_CLASS,
-                lpparam.classLoader,
-                "setDoublePressHandlingEnabled",
-                Boolean::class.javaPrimitiveType,
-                object : XC_MethodHook() {
-                    override fun beforeHookedMethod(param: MethodHookParam) {
-                        if (param.args.isNotEmpty() && param.args[0] is Boolean) {
-                            val enabled = param.args[0] as Boolean
-                            if (!enabled) {
-                                param.args[0] = true
-                                Log.i(LOG_TAG, "Forcing double-press handling enabled")
-                                XposedBridge.log("NothingXpert: Forcing double-press handling enabled")
+        if (ENABLE_DOUBLE_TAP || isSingleTapEnabled()) {
+            try {
+                // Ensure double-tap detection is enabled on the lockscreen TouchHandlingView only when needed.
+                XposedHelpers.findAndHookMethod(
+                    TOUCH_HANDLING_VIEW_CLASS,
+                    lpparam.classLoader,
+                    "setDoublePressHandlingEnabled",
+                    Boolean::class.javaPrimitiveType,
+                    object : XC_MethodHook() {
+                        override fun beforeHookedMethod(param: MethodHookParam) {
+                            // Only enforce while screen is ON and we're on keyguard.
+                            val ctx = (param.thisObject as? View)?.context
+                            val pm = ctx?.getSystemService(Context.POWER_SERVICE) as? PowerManager
+                            val km = ctx?.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
+                            val screenOn = pm?.isInteractive == true
+                            val onKeyguard = km?.isKeyguardLocked == true
+                            if (!(screenOn && onKeyguard)) return
+
+                            if (param.args.isNotEmpty() && param.args[0] is Boolean) {
+                                val enabled = param.args[0] as Boolean
+                                if (!enabled) {
+                                    param.args[0] = true
+                                }
                             }
                         }
                     }
-                }
-            )
-        } catch (t: Throwable) {
-            XposedBridge.log("NothingXpert: TouchHandlingView hook failed: $t")
+                )
+            } catch (t: Throwable) {
+                XposedBridge.log("NothingXpert: TouchHandlingView hook failed: $t")
+            }
         }
 
         try {
@@ -372,32 +380,35 @@ class HookEntry : IXposedHookLoadPackage {
             XposedBridge.log("NothingXpert: shuffle PIN hook failed: $t")
         }
 
-        // Install status bar double-tap-to-sleep hook
-        installStatusBarDoubleTapHook(lpparam)
+        // Install status bar double-tap-to-sleep hook only if enabled
+        if (isStatusBarDoubleTapEnabled()) {
+            installStatusBarDoubleTapHook(lpparam)
+        }
 
-        try {
-            // Directly hook the double-tap listener on the lockscreen view.
-            XposedHelpers.findAndHookMethod(
-                KEYGUARD_TOUCH_LISTENER_CLASS,
-                lpparam.classLoader,
-                "onDoubleTapDetected",
-                android.view.View::class.java,
-                object : XC_MethodHook() {
-                    override fun beforeHookedMethod(param: MethodHookParam) {
-                        if (!ENABLE_DOUBLE_TAP) return
-                        val view = param.args.getOrNull(0) as? android.view.View ?: return
-                        val pm = view.context.getSystemService(PowerManager::class.java) ?: return
-                        val uptime = SystemClock.uptimeMillis()
-                        Log.i(LOG_TAG, "onDoubleTapDetected hook fired, sleeping")
-                        XposedBridge.log("NothingXpert: onDoubleTapDetected hook fired, sleeping")
-                        if (tryGoToSleep(pm, uptime)) {
-                            param.result = null
+        if (ENABLE_DOUBLE_TAP) {
+            try {
+                // Directly hook the double-tap listener on the lockscreen view.
+                XposedHelpers.findAndHookMethod(
+                    KEYGUARD_TOUCH_LISTENER_CLASS,
+                    lpparam.classLoader,
+                    "onDoubleTapDetected",
+                    android.view.View::class.java,
+                    object : XC_MethodHook() {
+                        override fun beforeHookedMethod(param: MethodHookParam) {
+                            val view = param.args.getOrNull(0) as? android.view.View ?: return
+                            val pm = view.context.getSystemService(PowerManager::class.java) ?: return
+                            val km = view.context.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
+                            if (pm.isInteractive.not() || km?.isKeyguardLocked != true) return
+                            val uptime = SystemClock.uptimeMillis()
+                            if (tryGoToSleep(pm, uptime)) {
+                                param.result = null
+                            }
                         }
                     }
-                }
-            )
-        } catch (t: Throwable) {
-            XposedBridge.log("NothingXpert: KeyguardTouchViewBinder listener hook failed: $t")
+                )
+            } catch (t: Throwable) {
+                XposedBridge.log("NothingXpert: KeyguardTouchViewBinder listener hook failed: $t")
+            }
         }
 
         try {
@@ -444,8 +455,6 @@ class HookEntry : IXposedHookLoadPackage {
                         val app = currentApplication() ?: return
                         val pm = app.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return
                         val uptime = SystemClock.uptimeMillis()
-                        Log.i(LOG_TAG, "gestureDetector onDoubleTap hook fired, sleeping")
-                        XposedBridge.log("NothingXpert: gestureDetector onDoubleTap hook fired, sleeping")
                         if (tryGoToSleep(pm, uptime)) {
                             blockTouchesUntil = SystemClock.uptimeMillis() + TOUCH_BLOCK_MS
                             param.result = true
@@ -456,35 +465,37 @@ class HookEntry : IXposedHookLoadPackage {
         } catch (t: Throwable) {
             XposedBridge.log("NothingXpert: TouchHandlingViewInteractionHandler hook failed: $t")
         }
-        try {
-            // Single tap to sleep via dispatchSingleTap in the interaction handler.
-            XposedHelpers.findAndHookMethod(
-                TOUCH_INTERACTION_HANDLER_CLASS,
-                lpparam.classLoader,
-                "dispatchSingleTap",
-                Int::class.javaPrimitiveType,
-                Int::class.javaPrimitiveType,
-                object : XC_MethodHook() {
-                    override fun beforeHookedMethod(param: MethodHookParam) {
-                        val app = currentApplication() ?: return
-                        val pm = app.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return
-                        val x = param.args.getOrNull(0) as? Int ?: 0
-                        val y = param.args.getOrNull(1) as? Int ?: 0
-                        val uptime = SystemClock.uptimeMillis()
-                        Log.i(LOG_TAG, "dispatchSingleTap hook fired, sleeping")
-                        XposedBridge.log("NothingXpert: dispatchSingleTap hook fired, sleeping")
-                        if (isSingleTapEnabled()) {
+        if (isSingleTapEnabled()) {
+            try {
+                // Single tap to sleep via dispatchSingleTap in the interaction handler.
+                XposedHelpers.findAndHookMethod(
+                    TOUCH_INTERACTION_HANDLER_CLASS,
+                    lpparam.classLoader,
+                    "dispatchSingleTap",
+                    Int::class.javaPrimitiveType,
+                    Int::class.javaPrimitiveType,
+                    object : XC_MethodHook() {
+                        override fun beforeHookedMethod(param: MethodHookParam) {
+                            val app = currentApplication() ?: return
+                            val pm = app.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return
+                            if (!pm.isInteractive) return
+                            val km = app.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
+                            if (km?.isKeyguardLocked != true) return
+
+                            val x = param.args.getOrNull(0) as? Int ?: 0
+                            val y = param.args.getOrNull(1) as? Int ?: 0
+                            val uptime = SystemClock.uptimeMillis()
                             setTapPosition(x, y)
-                        }
-                        if (isSingleTapEnabled() && tryGoToSleep(pm, uptime)) {
-                            blockTouchesUntil = SystemClock.uptimeMillis() + TOUCH_BLOCK_MS
-                            param.result = null
+                            if (tryGoToSleep(pm, uptime)) {
+                                blockTouchesUntil = SystemClock.uptimeMillis() + TOUCH_BLOCK_MS
+                                param.result = null
+                            }
                         }
                     }
-                }
-            )
-        } catch (t: Throwable) {
-            XposedBridge.log("NothingXpert: dispatchSingleTap hook failed: $t")
+                )
+            } catch (t: Throwable) {
+                XposedBridge.log("NothingXpert: dispatchSingleTap hook failed: $t")
+            }
         }
 
         try {
@@ -558,48 +569,46 @@ class HookEntry : IXposedHookLoadPackage {
             XposedBridge.log("NothingXpert: scheduleLongPress hook failed: $t")
         }
 
-        try {
-            // NothingOS tap handler (power/lockscreen double-tap paths).
-            XposedHelpers.findAndHookMethod(
-                NT_TAP_HANDLE_CLASS,
-                lpparam.classLoader,
-                "doubleTapEvent",
-                Int::class.javaPrimitiveType,
-                Int::class.javaPrimitiveType,
-                object : XC_MethodHook() {
-                    override fun beforeHookedMethod(param: MethodHookParam) {
-                        if (!ENABLE_DOUBLE_TAP) return
-                        val handler = param.thisObject ?: return
-                        try {
-                            val keyguard =
-                                XposedHelpers.getObjectField(handler, "mKeyguardStateController")
-                                    ?: return
-                            val isShowing =
-                                (XposedHelpers.callMethod(keyguard, "isShowing") as? Boolean)
-                                    ?: false
-                            if (!isShowing) return
+        if (ENABLE_DOUBLE_TAP) {
+            try {
+                // NothingOS tap handler (power/lockscreen double-tap paths).
+                XposedHelpers.findAndHookMethod(
+                    NT_TAP_HANDLE_CLASS,
+                    lpparam.classLoader,
+                    "doubleTapEvent",
+                    Int::class.javaPrimitiveType,
+                    Int::class.javaPrimitiveType,
+                    object : XC_MethodHook() {
+                        override fun beforeHookedMethod(param: MethodHookParam) {
+                            val handler = param.thisObject ?: return
+                            try {
+                                val keyguard =
+                                    XposedHelpers.getObjectField(handler, "mKeyguardStateController")
+                                        ?: return
+                                val isShowing =
+                                    (XposedHelpers.callMethod(keyguard, "isShowing") as? Boolean)
+                                        ?: false
+                                if (!isShowing) return
 
-                            val powerManager =
-                                XposedHelpers.getObjectField(handler, "mPowerManager") as? PowerManager
-                            val uptime = SystemClock.uptimeMillis()
+                                val powerManager =
+                                    XposedHelpers.getObjectField(handler, "mPowerManager") as? PowerManager
+                                if (powerManager?.isInteractive != true) return
 
-                            if (powerManager != null) {
-                                Log.i(LOG_TAG, "NTTapHandle double-tap on keyguard, sleeping")
-                                XposedBridge.log("NothingXpert: NTTapHandle double-tap on keyguard, sleeping")
+                                val uptime = SystemClock.uptimeMillis()
                                 if (tryGoToSleep(powerManager, uptime)) {
                                     blockTouchesUntil = SystemClock.uptimeMillis() + TOUCH_BLOCK_MS
                                     param.result = null
                                 }
+                            } catch (t: Throwable) {
+                                Log.e(LOG_TAG, "NTTapHandle hook failed", t)
+                                XposedBridge.log("NothingXpert: NTTapHandle hook failed: $t")
                             }
-                        } catch (t: Throwable) {
-                            Log.e(LOG_TAG, "NTTapHandle hook failed", t)
-                            XposedBridge.log("NothingXpert: NTTapHandle hook failed: $t")
                         }
                     }
-                }
-            )
-        } catch (t: Throwable) {
-            XposedBridge.log("NothingXpert: NTTapHandle hook setup failed: $t")
+                )
+            } catch (t: Throwable) {
+                XposedBridge.log("NothingXpert: NTTapHandle hook setup failed: $t")
+            }
         }
 
         try {
@@ -1294,6 +1303,8 @@ class HookEntry : IXposedHookLoadPackage {
         const val VOLUME_LONG_PRESS_DELAY_MS = 350L
         const val SHAKE_THRESHOLD = 19.5f
         const val SHAKE_COOLDOWN_MS = 1500L
+        private const val PREF_CACHE_MS = 5_000L
+        private val prefCache = HashMap<String, Pair<Long, Boolean>>()
         
         // Volume action constants (matching PixelXpert)
         const val ACTION_NONE = -1
@@ -1427,26 +1438,36 @@ class HookEntry : IXposedHookLoadPackage {
     }
 
     private fun getPreferenceBoolean(key: String, defValue: Boolean): Boolean {
+        val now = SystemClock.uptimeMillis()
+        prefCache[key]?.let { (ts, v) ->
+            if (now - ts < PREF_CACHE_MS) return v
+        }
+
         try {
-            // Strategy 1: Standard XSharedPreferences
             val prefs = XSharedPreferences(MODULE_PKG, "${MODULE_PKG}_preferences")
             prefs.makeWorldReadable()
             if (prefs.hasFileChanged()) prefs.reload()
-            if (prefs.contains(key)) return prefs.getBoolean(key, defValue)
-            
-        } catch (t: Throwable) {
-             XposedBridge.log("NothingXpert: Error reading pref $key: $t")
+            if (prefs.contains(key)) {
+                val v = prefs.getBoolean(key, defValue)
+                prefCache[key] = now to v
+                return v
+            }
+        } catch (_: Throwable) {
         }
 
-        // Strategy 3: Fallback to app context
         try {
-            val app = currentApplication() 
+            val app = currentApplication()
             if (app != null) {
                 val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(app)
-                if (prefs.contains(key)) return prefs.getBoolean(key, defValue)
+                if (prefs.contains(key)) {
+                    val v = prefs.getBoolean(key, defValue)
+                    prefCache[key] = now to v
+                    return v
+                }
             }
         } catch (_: Throwable) { }
 
+        prefCache[key] = now to defValue
         return defValue
     }
 }
