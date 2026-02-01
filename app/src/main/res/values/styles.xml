@@ -19,6 +19,30 @@
         <item name="colorSurface">?attr/colorSurfaceContainer</item>
     </style>
 
+    <style name="Theme.NothingXpert.Amoled" parent="Theme.NothingXpert">
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:colorBackground">@android:color/black</item>
+        <item name="colorSurface">@android:color/black</item>
+        <item name="colorSurfaceContainer">@android:color/black</item>
+        <item name="colorSurfaceContainerHigh">@android:color/black</item>
+        <item name="colorSurfaceContainerHighest">@android:color/black</item>
+        <item name="colorSurfaceContainerLow">@android:color/black</item>
+        <item name="colorSurfaceContainerLowest">@android:color/black</item>
+        
+        <!-- Force dark mode attributes for card visibility and text -->
+        <item name="colorSurfaceBright">#1C1C1C</item> <!-- Dark card background -->
+        <item name="colorOnSurface">#FFFFFF</item>
+        <item name="colorOnSurfaceVariant">#CCCCCC</item>
+        <item name="android:textColorPrimary">#FFFFFF</item>
+        <item name="android:textColorSecondary">#CCCCCC</item>
+        <item name="colorControlHighlight">#33FFFFFF</item>
+        
+        <!-- Status bar / Nav bar -->
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="isLightTheme">false</item>
+    </style>
+
     <!-- Preference theme overlays -->
     <style name="PrefsTheme" parent="PreferenceThemeOverlay.v14.Material">
         <item name="android:layout">@layout/fragment_preference_container</item>

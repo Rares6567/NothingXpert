@@ -41,11 +41,24 @@ class MainActivity : AppCompatActivity() {
     private lateinit var ramValue: TextView
     private lateinit var cpuValue: TextView
     private lateinit var gpuValue: TextView
+    private lateinit var tabMain: TextView
+    private lateinit var tabOptions: TextView
+    private lateinit var sectionMain: View
+    private lateinit var sectionOptions: View
 
     private var lastCpuIdle: Long = 0
     private var lastCpuTotal: Long = 0
 
+    private lateinit var gestureDetector: android.view.GestureDetector
+    private var isMainTabSelected = true
+
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Apply AMOLED theme if enabled
+        val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
+        if (prefs.getBoolean("pref_amoled_theme", false)) {
+            setTheme(R.style.Theme_NothingXpert_Amoled)
+        }
+
         super.onCreate(savedInstanceState)
         
         // Enable edge-to-edge display
@@ -66,13 +79,52 @@ class MainActivity : AppCompatActivity() {
             insets
         }
 
+        gestureDetector = android.view.GestureDetector(this, object : android.view.GestureDetector.SimpleOnGestureListener() {
+            private val SWIPE_THRESHOLD = 100
+            private val SWIPE_VELOCITY_THRESHOLD = 100
+
+            override fun onDown(e: android.view.MotionEvent): Boolean {
+                return false // Let scrollview handle scrolling
+            }
+
+            override fun onFling(
+                e1: android.view.MotionEvent?,
+                e2: android.view.MotionEvent,
+                velocityX: Float,
+                velocityY: Float
+            ): Boolean {
+                if (e1 == null) return false
+                val diffY = e2.y - e1.y
+                val diffX = e2.x - e1.x
+                if (Math.abs(diffX) > Math.abs(diffY)) {
+                    if (Math.abs(diffX) > SWIPE_THRESHOLD && Math.abs(velocityX) > SWIPE_VELOCITY_THRESHOLD) {
+                        if (diffX > 0) {
+                            // Swipe Right -> Go to Main
+                            if (!isMainTabSelected) selectTab(true)
+                        } else {
+                            // Swipe Left -> Go to Options
+                            if (isMainTabSelected) selectTab(false)
+                        }
+                        return true
+                    }
+                }
+                return false
+            }
+        })
+
         setupLockScreenCategory()
         setupMiscCategory()
         setupRamMonitor()
+        setupTabBar()
         
         // Animate on startup
         animateTitleOnStartup()
         animateCardsOnStartup()
+    }
+
+    override fun dispatchTouchEvent(ev: android.view.MotionEvent?): Boolean {
+        ev?.let { gestureDetector.onTouchEvent(it) }
+        return super.dispatchTouchEvent(ev)
     }
 
     override fun onDestroy() {
@@ -242,10 +294,116 @@ class MainActivity : AppCompatActivity() {
         ramValue = findViewById(R.id.ram_value)
         cpuValue = findViewById(R.id.cpu_value)
         gpuValue = findViewById(R.id.gpu_value)
+        sectionMain = findViewById(R.id.section_main)
+        sectionOptions = findViewById(R.id.section_options)
         updateRamUsage()
         updateGpuUsage()
         // Kick off update loop
         ramHandler.postDelayed(ramUpdateRunnable, 1000)
+    }
+
+    private fun setupTabBar() {
+        tabMain = findViewById(R.id.tab_main)
+        tabOptions = findViewById(R.id.tab_options)
+
+        tabMain.setOnClickListener { selectTab(true) }
+        tabOptions.setOnClickListener { selectTab(false) }
+
+        // Setup AMOLED switch
+        val switchAmoled = findViewById<com.google.android.material.materialswitch.MaterialSwitch>(R.id.switch_amoled)
+        val cardAmoled = findViewById<View>(R.id.card_amoled)
+        
+        val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
+        switchAmoled.isChecked = prefs.getBoolean("pref_amoled_theme", false)
+        
+        val toggleListener = { _: View ->
+            val newState = !switchAmoled.isChecked
+            switchAmoled.isChecked = newState
+            prefs.edit().putBoolean("pref_amoled_theme", newState).apply()
+            // Recreate to apply theme
+            recreate()
+        }
+        
+        // Toggle on card click
+        cardAmoled.setOnClickListener(toggleListener)
+        // Toggle on switch click (override default to handle recreation)
+        switchAmoled.setOnClickListener { 
+            prefs.edit().putBoolean("pref_amoled_theme", switchAmoled.isChecked).apply()
+            recreate()
+        }
+
+        selectTab(true)
+    }
+
+    private fun selectTab(main: Boolean) {
+        if (isMainTabSelected == main) return
+        isMainTabSelected = main
+        
+        val selectedColor = getThemeColor(com.google.android.material.R.attr.colorOnSurface)
+        val unselectedColor = getThemeColor(com.google.android.material.R.attr.colorOnSurfaceVariant)
+
+        slideSections(showMain = main)
+
+        // No pill; just color emphasis
+        animateTextColor(tabMain, if (main) selectedColor else unselectedColor)
+        animateTextColor(tabOptions, if (!main) selectedColor else unselectedColor)
+    }
+
+    private fun getThemeColor(attr: Int): Int {
+        val typedValue = android.util.TypedValue()
+        theme.resolveAttribute(attr, typedValue, true)
+        return typedValue.data
+    }
+
+    private fun slideSections(showMain: Boolean) {
+        val toShow = if (showMain) sectionMain else sectionOptions
+        val toHide = if (showMain) sectionOptions else sectionMain
+
+        toShow.animate().cancel()
+        toHide.animate().cancel()
+
+        // Convert dp to px for consistent travel distance
+        val travelDist = dpToPx(40f)
+        val inFromX = if (showMain) -travelDist else travelDist
+        val outToX = if (showMain) travelDist else -travelDist
+
+        toShow.visibility = View.VISIBLE
+        toShow.alpha = 0f
+        toShow.translationX = inFromX
+        toShow.animate()
+            .alpha(1f)
+            .translationX(0f)
+            .setDuration(300)
+            .setInterpolator(android.view.animation.DecelerateInterpolator(1.5f))
+            .start()
+
+        toHide.animate()
+            .alpha(0f)
+            .translationX(outToX)
+            .setDuration(250)
+            .setInterpolator(android.view.animation.DecelerateInterpolator(1.5f))
+            .withEndAction {
+                toHide.visibility = View.GONE
+                toHide.translationX = 0f
+            }
+            .start()
+    }
+
+    private fun dpToPx(dp: Float): Float {
+        return android.util.TypedValue.applyDimension(
+            android.util.TypedValue.COMPLEX_UNIT_DIP,
+            dp,
+            resources.displayMetrics
+        )
+    }
+
+    private fun animateTextColor(tv: TextView, targetColor: Int) {
+        val startColor = tv.currentTextColor
+        if (startColor == targetColor) return
+        val animator = ValueAnimator.ofObject(ArgbEvaluator(), startColor, targetColor)
+        animator.duration = 180
+        animator.addUpdateListener { tv.setTextColor(it.animatedValue as Int) }
+        animator.start()
     }
 
     private fun updateRamUsage() {

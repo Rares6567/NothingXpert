@@ -29,4 +29,12 @@
     <string name="cpu_monitor_format">CPU: %1$d%% (%2$s)</string>
     <string name="gpu_monitor_placeholder">GPU: --%% (--°C)</string>
     <string name="gpu_monitor_format">GPU: %1$s (%2$s)</string>
+
+    <!-- Bottom tabs / Options sheet -->
+    <string name="tab_main">Main</string>
+    <string name="tab_options">Options</string>
+    <string name="options_menu_title">Options</string>
+    <string name="options_menu_subtitle">Quick access to sections</string>
+    <string name="option_amoled_title">AMOLED Theme</string>
+    <string name="option_amoled_summary">Use pitch black background</string>
 </resources>
