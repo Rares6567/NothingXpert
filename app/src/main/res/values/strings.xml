@@ -18,4 +18,15 @@
     <string name="pref_category_remap_buttons">Remap Buttons</string>
     <string name="pref_volume_up_action_title">Volume up long-press</string>
     <string name="pref_volume_down_action_title">Volume down long-press</string>
+
+    <!-- RAM monitor -->
+    <string name="ram_monitor_title">RAM usage</string>
+    <string name="ram_monitor_placeholder">RAM: -- / -- (--%%)</string>
+    <string name="ram_monitor_format">RAM: %1$s / %2$s (%3$d%%)</string>
+
+    <!-- CPU / GPU -->
+    <string name="cpu_monitor_placeholder">CPU: --%% (--°C)</string>
+    <string name="cpu_monitor_format">CPU: %1$d%% (%2$s)</string>
+    <string name="gpu_monitor_placeholder">GPU: --%% (--°C)</string>
+    <string name="gpu_monitor_format">GPU: %1$s (%2$s)</string>
 </resources>
