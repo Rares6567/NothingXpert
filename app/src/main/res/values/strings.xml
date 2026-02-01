@@ -15,6 +15,7 @@
     <string name="misc_category_summary">Other tweaks and customizations</string>
     <string name="pref_allow_secure_title">Allow screenshots from restricted content</string>
     <string name="pref_allow_secure_summary">Remove the secure flag so screenshots and screen recordings work where blocked</string>
-    <string name="pref_volume_tracks_title">Volume long-press for tracks</string>
-    <string name="pref_volume_tracks_summary">Screen off: hold volume + for next, volume – for previous</string>
+    <string name="pref_category_remap_buttons">Remap Buttons</string>
+    <string name="pref_volume_up_action_title">Volume up long-press</string>
+    <string name="pref_volume_down_action_title">Volume down long-press</string>
 </resources>

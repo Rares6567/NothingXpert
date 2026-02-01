@@ -29,16 +29,18 @@ class HookEntry : IXposedHookLoadPackage {
 
     private val skipUpRunnable = Runnable {
         if (!skipUpSent) {
-            val ok = sendMediaCommand(KeyEvent.KEYCODE_MEDIA_NEXT, runnableContext)
-            XposedBridge.log("NothingXpert: skipUpRunnable fired ok=$ok")
+            val action = getVolumeUpAction()
+            val ok = executeVolumeAction(action, runnableContext)
+            XposedBridge.log("NothingXpert: skipUpRunnable fired action=$action ok=$ok")
             if (ok) skipUpSent = true
         }
     }
 
     private val skipDownRunnable = Runnable {
         if (!skipDownSent) {
-            val ok = sendMediaCommand(KeyEvent.KEYCODE_MEDIA_PREVIOUS, runnableContext)
-            XposedBridge.log("NothingXpert: skipDownRunnable fired ok=$ok")
+            val action = getVolumeDownAction()
+            val ok = executeVolumeAction(action, runnableContext)
+            XposedBridge.log("NothingXpert: skipDownRunnable fired action=$action ok=$ok")
             if (ok) skipDownSent = true
         }
     }
@@ -794,20 +796,36 @@ class HookEntry : IXposedHookLoadPackage {
         return prefs.getBoolean(PREF_SHUFFLE_PIN, false)
     }
 
-    private fun isVolumeTracksEnabled(): Boolean {
+    private fun getVolumeUpAction(): Int {
         try {
             val file = java.io.File("/data/user_de/0/$MODULE_PKG/shared_prefs/${MODULE_PKG}_preferences.xml")
             val xsp = if (file.exists()) XSharedPreferences(file) else XSharedPreferences(MODULE_PKG, "${MODULE_PKG}_preferences")
             xsp.makeWorldReadable()
             if (xsp.hasFileChanged()) xsp.reload()
-            if (xsp.contains(PREF_VOLUME_TRACKS)) {
-                return xsp.getBoolean(PREF_VOLUME_TRACKS, false)
+            if (xsp.contains(PREF_VOLUME_UP_ACTION)) {
+                return xsp.getString(PREF_VOLUME_UP_ACTION, "0")?.toIntOrNull() ?: ACTION_DEFAULT
             }
         } catch (_: Throwable) {
         }
-        val app = currentApplication() ?: return false
+        val app = currentApplication() ?: return ACTION_DEFAULT
         val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(app)
-        return prefs.getBoolean(PREF_VOLUME_TRACKS, false)
+        return prefs.getString(PREF_VOLUME_UP_ACTION, "0")?.toIntOrNull() ?: ACTION_DEFAULT
+    }
+
+    private fun getVolumeDownAction(): Int {
+        try {
+            val file = java.io.File("/data/user_de/0/$MODULE_PKG/shared_prefs/${MODULE_PKG}_preferences.xml")
+            val xsp = if (file.exists()) XSharedPreferences(file) else XSharedPreferences(MODULE_PKG, "${MODULE_PKG}_preferences")
+            xsp.makeWorldReadable()
+            if (xsp.hasFileChanged()) xsp.reload()
+            if (xsp.contains(PREF_VOLUME_DOWN_ACTION)) {
+                return xsp.getString(PREF_VOLUME_DOWN_ACTION, "0")?.toIntOrNull() ?: ACTION_DEFAULT
+            }
+        } catch (_: Throwable) {
+        }
+        val app = currentApplication() ?: return ACTION_DEFAULT
+        val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(app)
+        return prefs.getString(PREF_VOLUME_DOWN_ACTION, "0")?.toIntOrNull() ?: ACTION_DEFAULT
     }
 
     private fun sendMediaCommand(keyCode: Int, context: Context? = currentApplication()): Boolean {
@@ -821,6 +839,50 @@ class HookEntry : IXposedHookLoadPackage {
         } catch (t: Throwable) {
             XposedBridge.log("NothingXpert: sendMediaCommand failed: $t")
             false
+        }
+    }
+
+    private fun executeVolumeAction(action: Int, context: Context?): Boolean {
+        return try {
+            when (action) {
+                ACTION_NONE -> true // do nothing, but consume
+                ACTION_TORCH -> {
+                    toggleFlashlight(context)
+                    true
+                }
+                ACTION_PLAY_PAUSE -> sendMediaCommand(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, context)
+                ACTION_NEXT -> sendMediaCommand(KeyEvent.KEYCODE_MEDIA_NEXT, context)
+                ACTION_PREV -> sendMediaCommand(KeyEvent.KEYCODE_MEDIA_PREVIOUS, context)
+                else -> false
+            }
+        } catch (t: Throwable) {
+            XposedBridge.log("NothingXpert: executeVolumeAction failed: $t")
+            false
+        }
+    }
+
+    private fun toggleFlashlight(context: Context?) {
+        try {
+            val cameraManager = context?.getSystemService(Context.CAMERA_SERVICE) as? android.hardware.camera2.CameraManager
+            if (cameraManager == null) {
+                XposedBridge.log("NothingXpert: CameraManager is null")
+                return
+            }
+            val cameraId = cameraManager.cameraIdList.firstOrNull { id ->
+                val characteristics = cameraManager.getCameraCharacteristics(id)
+                characteristics.get(android.hardware.camera2.CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
+            }
+            if (cameraId == null) {
+                XposedBridge.log("NothingXpert: No camera with flash found")
+                return
+            }
+            // Toggle state - we need to track current state
+            val isOn = flashlightOn
+            cameraManager.setTorchMode(cameraId, !isOn)
+            flashlightOn = !isOn
+            XposedBridge.log("NothingXpert: Flashlight toggled to ${!isOn}")
+        } catch (t: Throwable) {
+            XposedBridge.log("NothingXpert: toggleFlashlight failed: $t")
         }
     }
 
@@ -853,20 +915,21 @@ class HookEntry : IXposedHookLoadPackage {
         powerManager: PowerManager,
         context: Context?
     ): Boolean {
-        val enabled = isVolumeTracksEnabled()
-        if (!enabled) return false
+        val code = event.keyCode
+        if (code != KeyEvent.KEYCODE_VOLUME_UP && code != KeyEvent.KEYCODE_VOLUME_DOWN) return false
+
+        // Check if this specific key has a configured action
+        val configuredAction = if (code == KeyEvent.KEYCODE_VOLUME_UP) getVolumeUpAction() else getVolumeDownAction()
+        if (configuredAction == ACTION_DEFAULT) return false // let system handle
 
         val screenOff = !powerManager.isInteractive
         if (!screenOff) return false
 
         if (context != null) runnableContext = context
 
-        val code = event.keyCode
-        if (code != KeyEvent.KEYCODE_VOLUME_UP && code != KeyEvent.KEYCODE_VOLUME_DOWN) return false
-
-        val action = event.action
+        val eventAction = event.action
         val repeat = event.repeatCount
-        XposedBridge.log("NothingXpert: vol evt code=$code action=$action repeat=$repeat screenOff=$screenOff upSent=$skipUpSent downSent=$skipDownSent")
+        XposedBridge.log("NothingXpert: vol evt code=$code action=$eventAction repeat=$repeat screenOff=$screenOff configuredAction=$configuredAction")
 
         when (event.action) {
             KeyEvent.ACTION_DOWN -> {
@@ -921,10 +984,19 @@ class HookEntry : IXposedHookLoadPackage {
         const val TOUCH_BLOCK_MS = 0L
         const val PREF_SINGLE_TAP = "pref_single_tap_sleep"
         const val PREF_ALLOW_SECURE = "pref_allow_secure_screenshot"
-        const val PREF_VOLUME_TRACKS = "pref_volume_longpress_tracks"
+        const val PREF_VOLUME_UP_ACTION = "pref_volume_up_action"
+        const val PREF_VOLUME_DOWN_ACTION = "pref_volume_down_action"
         const val PREF_SHUFFLE_PIN = "pref_shuffle_pin"
         const val ENABLE_DOUBLE_TAP = false
         const val VOLUME_LONG_PRESS_DELAY_MS = 350L
+        
+        // Volume action constants (matching PixelXpert)
+        const val ACTION_NONE = -1
+        const val ACTION_DEFAULT = 0
+        const val ACTION_TORCH = 1
+        const val ACTION_PLAY_PAUSE = 5
+        const val ACTION_NEXT = 6
+        const val ACTION_PREV = 7
 
         // Doze sensor IDs that can wake the device (tap, double tap, pickups, gestures).
         private val DOZE_BLOCKED_SENSORS = setOf(3, 4, 7, 8, 10, 11, 14)
@@ -946,6 +1018,9 @@ class HookEntry : IXposedHookLoadPackage {
 
         @Volatile
         private var policyVolumeInstalled: Boolean = false
+
+        @Volatile
+        private var flashlightOn: Boolean = false
 
     }
 }
