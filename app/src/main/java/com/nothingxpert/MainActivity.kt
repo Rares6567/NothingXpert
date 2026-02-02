@@ -467,10 +467,13 @@ class MainActivity : AppCompatActivity() {
         val cardAmoled = findViewById<View>(R.id.card_amoled)
         val switchBoot = findViewById<com.google.android.material.materialswitch.MaterialSwitch>(R.id.switch_boot)
         val cardBoot = findViewById<View>(R.id.card_boot)
+        val switchDebug = findViewById<com.google.android.material.materialswitch.MaterialSwitch>(R.id.switch_debug_logs)
+        val cardDebug = findViewById<View>(R.id.card_debug_logs)
         
         val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
         switchAmoled.isChecked = prefs.getBoolean("pref_amoled_theme", false)
         switchBoot.isChecked = prefs.getBoolean("pref_launch_on_boot", false)
+        switchDebug.isChecked = prefs.getBoolean("pref_debug_logs", false)
         
         val toggleListener = { _: View ->
             val newState = !switchAmoled.isChecked
@@ -499,6 +502,26 @@ class MainActivity : AppCompatActivity() {
         switchBoot.setOnClickListener { 
             prefs.edit().putBoolean("pref_launch_on_boot", switchBoot.isChecked).commit()
             PrefsUtil.ensurePrefsAccessible(this)
+        }
+
+        val debugToggleListener = { _: View ->
+            val newState = !switchDebug.isChecked
+            switchDebug.isChecked = newState
+            prefs.edit().putBoolean("pref_debug_logs", newState).commit()
+            PrefsUtil.ensurePrefsAccessible(this)
+            sendBroadcast(
+                Intent(HookEntry.ACTION_DEBUG_LOGS_TOGGLED)
+                    .putExtra(HookEntry.EXTRA_DEBUG_LOGS_ENABLED, newState)
+            )
+        }
+        cardDebug.setOnClickListener(debugToggleListener)
+        switchDebug.setOnClickListener {
+            prefs.edit().putBoolean("pref_debug_logs", switchDebug.isChecked).commit()
+            PrefsUtil.ensurePrefsAccessible(this)
+            sendBroadcast(
+                Intent(HookEntry.ACTION_DEBUG_LOGS_TOGGLED)
+                    .putExtra(HookEntry.EXTRA_DEBUG_LOGS_ENABLED, switchDebug.isChecked)
+            )
         }
     }
 
