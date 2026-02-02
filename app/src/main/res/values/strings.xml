@@ -17,6 +17,8 @@
     <string name="pref_allow_secure_summary">Remove the secure flag so screenshots and screen recordings work where blocked</string>
     <string name="pref_shake_torch_title">Shake to toggle flashlight</string>
     <string name="pref_shake_torch_summary">Shake the phone when the screen is off to turn the flashlight on or off</string>
+    <string name="pref_hide_ime_bar_title">Remove empty space from Gboard</string>
+    <string name="pref_hide_ime_bar_summary">Remove the globe/arrow strip above the keyboard</string>
     <string name="app_lock_title">App Lock</string>
     <string name="app_lock_summary">Pick which apps should ask for unlock</string>
     <string name="app_lock_sort">Sort</string>

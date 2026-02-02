@@ -17,6 +17,7 @@ import android.media.AudioManager
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowInsets
 import android.view.WindowManager
 import android.widget.TextView
 import android.view.Gravity
@@ -24,8 +25,10 @@ import android.graphics.Color
 import android.widget.FrameLayout
 import android.hardware.biometrics.BiometricPrompt
 import android.os.CancellationSignal
+import android.view.inputmethod.EditorInfo
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 import de.robv.android.xposed.XSharedPreferences
 import kotlin.math.abs
 import kotlin.math.min
@@ -211,6 +214,50 @@ class HookEntry : IXposedHookLoadPackage {
         }
     }
 
+    private fun registerImeToggleReceiver() {
+        if (imeReceiverRegistered) return
+        val ctx = getSystemContext() ?: return
+        try {
+            val filter = android.content.IntentFilter(ACTION_IME_BAR_TOGGLED)
+            val receiver = object : android.content.BroadcastReceiver() {
+                override fun onReceive(context: Context?, intent: Intent?) {
+                    if (intent?.action != ACTION_IME_BAR_TOGGLED) return
+                    forceStopPackage(ctx, GBOARD_PKG)
+                }
+            }
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                ctx.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
+            } else {
+                ctx.registerReceiver(receiver, filter)
+            }
+            imeReceiverRegistered = true
+            XposedBridge.log("NothingXpert: IME toggle receiver registered")
+        } catch (t: Throwable) {
+            XposedBridge.log("NothingXpert: Failed to register IME toggle receiver: $t")
+        }
+    }
+
+    private fun getSystemContext(): Context? {
+        return try {
+            val at = Class.forName("android.app.ActivityThread")
+            val thread = XposedHelpers.callStaticMethod(at, "currentActivityThread")
+            XposedHelpers.callMethod(thread, "getSystemContext") as? Context
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    private fun forceStopPackage(context: Context, pkg: String) {
+        try {
+            val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager ?: return
+            val method = am.javaClass.getMethod("forceStopPackage", String::class.java)
+            method.invoke(am, pkg)
+            XposedBridge.log("NothingXpert: force-stopped $pkg")
+        } catch (t: Throwable) {
+            XposedBridge.log("NothingXpert: force-stop failed for $pkg: $t")
+        }
+    }
+
     private val skipDownRunnable = Runnable {
         if (!skipDownSent) {
             val action = getVolumeDownAction()
@@ -225,6 +272,7 @@ class HookEntry : IXposedHookLoadPackage {
         if (lpparam.packageName == "android") {
             installPolicyVolumeHooks(lpparam)
             startCpuReporter(lpparam)
+            registerImeToggleReceiver()
             return
         }
 
@@ -238,6 +286,10 @@ class HookEntry : IXposedHookLoadPackage {
 
         // Install App Lock Hook for all apps
         installAppLockHook(lpparam)
+
+        if (lpparam.packageName == GBOARD_PKG) {
+            installHideImeBarHook(lpparam)
+        }
 
         if (lpparam.packageName != SYSTEMUI_PKG) return
 
@@ -263,6 +315,8 @@ class HookEntry : IXposedHookLoadPackage {
         } catch (t: Throwable) {
             XposedBridge.log("NothingXpert: interactor hook setup failed: $t")
         }
+
+        installHideNavbarHook(lpparam)
 
         try {
             // Also hook the ViewModel as a safety net in case the interactor path changes.
@@ -1107,6 +1161,14 @@ class HookEntry : IXposedHookLoadPackage {
         return getPreferenceBoolean(PREF_SHAKE_TORCH, false)
     }
 
+    private fun isHideImeBarEnabled(): Boolean {
+        return getPreferenceBoolean(PREF_HIDE_IME_BAR, false)
+    }
+
+    private fun isHideNavbarEnabled(): Boolean {
+        return ENABLE_HIDE_NAVBAR
+    }
+
     private fun getVolumeUpAction(): Int {
         try {
             val file = java.io.File("/data/user_de/0/$MODULE_PKG/shared_prefs/${MODULE_PKG}_preferences.xml")
@@ -1299,12 +1361,19 @@ class HookEntry : IXposedHookLoadPackage {
         const val PREF_VOLUME_DOWN_ACTION = "pref_volume_down_action"
         const val PREF_SHUFFLE_PIN = "pref_shuffle_pin"
         const val PREF_SHAKE_TORCH = "pref_shake_torch"
+        const val PREF_HIDE_IME_BAR = "pref_hide_ime_bar"
+        const val ACTION_IME_BAR_TOGGLED = "com.nothingxpert.action.IME_BAR_TOGGLED"
+        const val EXTRA_IME_BAR_ENABLED = "enabled"
+        const val GBOARD_PKG = "com.google.android.inputmethod.latin"
+        const val ENABLE_HIDE_NAVBAR = true
         const val ENABLE_DOUBLE_TAP = false
         const val VOLUME_LONG_PRESS_DELAY_MS = 350L
         const val SHAKE_THRESHOLD = 19.5f
         const val SHAKE_COOLDOWN_MS = 1500L
         private const val PREF_CACHE_MS = 5_000L
         private val prefCache = HashMap<String, Pair<Long, Boolean>>()
+        private val imeDumpOnce = AtomicBoolean(false)
+        @Volatile private var imeReceiverRegistered = false
         
         // Volume action constants (matching PixelXpert)
         const val ACTION_NONE = -1
@@ -1431,6 +1500,344 @@ class HookEntry : IXposedHookLoadPackage {
         } catch (t: Throwable) {
             XposedBridge.log("NothingXpert: Error installing status bar double-tap hook: $t")
         }
+    }
+
+    private fun installHideImeBarHook(lpparam: XC_LoadPackage.LoadPackageParam) {
+        try {
+            val imsClass = XposedHelpers.findClass(
+                "android.inputmethodservice.InputMethodService",
+                lpparam.classLoader
+            )
+            XposedHelpers.findAndHookMethod(
+                imsClass,
+                "onWindowShown",
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        if (!isHideImeBarEnabled()) return
+                        val ims = param.thisObject
+                        handler.post { hideImeSwitcher(ims) }
+                    }
+                }
+            )
+            XposedHelpers.findAndHookMethod(
+                imsClass,
+                "onStartInputView",
+                EditorInfo::class.java,
+                Boolean::class.javaPrimitiveType,
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        if (!isHideImeBarEnabled()) return
+                        val ims = param.thisObject
+                        handler.post { hideImeSwitcher(ims) }
+                    }
+                }
+            )
+            XposedBridge.log("NothingXpert: IME bar hider installed")
+        } catch (t: Throwable) {
+            XposedBridge.log("NothingXpert: Failed to install IME bar hider: $t")
+        }
+    }
+
+    private fun hideImeSwitcher(ims: Any) {
+        try {
+            val dialog = XposedHelpers.callMethod(ims, "getWindow") as? android.app.Dialog ?: return
+            val window = dialog.window ?: return
+            val decor = window.decorView ?: return
+            val ids = listOf("input_method_nav_bar", "input_method_nav_back", "input_method_nav_ime_switcher")
+            var hiddenAny = false
+            for (name in ids) {
+                val id = decor.resources.getIdentifier(name, "id", "android")
+                if (id == 0) continue
+                val v = decor.findViewById<View>(id) ?: continue
+                v.visibility = View.GONE
+                v.alpha = 0f
+                v.layoutParams = v.layoutParams?.apply { height = 0 }
+                (v.parent as? ViewGroup)?.requestLayout()
+                zeroBottomPaddingUp(v)
+                hiddenAny = true
+            }
+            if (hiddenAny) {
+                XposedBridge.log("NothingXpert: IME nav bar hidden")
+            }
+            zeroBottomPaddingUp(decor, 6)
+            adjustImeInputViewPadding(decor)
+            decor.post {
+                adjustImeInputViewPadding(decor)
+                stripImeBottomInset(decor)
+            }
+            if (imeDumpOnce.compareAndSet(false, true)) {
+                decor.postDelayed({ dumpImeBottomViews(decor) }, 250)
+            }
+            decor.requestLayout()
+        } catch (t: Throwable) {
+            XposedBridge.log("NothingXpert: Failed to hide IME nav bar: $t")
+        }
+    }
+
+    private fun installImeInsetsOverride(root: View) {
+        try {
+            if (root.getTag() == "nx_ime_insets") return
+            root.setTag("nx_ime_insets")
+            root.setOnApplyWindowInsetsListener { _, insets ->
+                if (!isHideImeBarEnabled()) return@setOnApplyWindowInsetsListener insets
+                val builder = WindowInsets.Builder(insets)
+                val zero = android.graphics.Insets.of(0, 0, 0, 0)
+                builder.setInsets(WindowInsets.Type.navigationBars(), zero)
+                builder.setInsets(WindowInsets.Type.systemBars(), zero)
+                builder.setInsets(WindowInsets.Type.systemGestures(), zero)
+                builder.setInsets(WindowInsets.Type.mandatorySystemGestures(), zero)
+                builder.setInsets(WindowInsets.Type.tappableElement(), zero)
+                try {
+                    builder.setInsetsIgnoringVisibility(WindowInsets.Type.navigationBars(), zero)
+                    builder.setInsetsIgnoringVisibility(WindowInsets.Type.systemBars(), zero)
+                    builder.setInsetsIgnoringVisibility(WindowInsets.Type.systemGestures(), zero)
+                    builder.setInsetsIgnoringVisibility(WindowInsets.Type.mandatorySystemGestures(), zero)
+                    builder.setInsetsIgnoringVisibility(WindowInsets.Type.tappableElement(), zero)
+                } catch (_: Throwable) {
+                }
+                builder.build()
+            }
+            if (root.paddingBottom != 0) {
+                root.setPadding(root.paddingLeft, root.paddingTop, root.paddingRight, 0)
+            }
+            root.requestApplyInsets()
+            XposedBridge.log("NothingXpert: IME insets override installed")
+        } catch (t: Throwable) {
+            XposedBridge.log("NothingXpert: Failed to install IME insets override: $t")
+        }
+    }
+
+    private fun installHideNavbarHook(lpparam: XC_LoadPackage.LoadPackageParam) {
+        if (!isHideNavbarEnabled()) return
+        try {
+            val navBarViewClass = try {
+                XposedHelpers.findClass("com.android.systemui.navigationbar.views.NavigationBarView", lpparam.classLoader)
+            } catch (_: Throwable) {
+                try {
+                    XposedHelpers.findClass("com.android.systemui.navigationbar.NavigationBarView", lpparam.classLoader)
+                } catch (_: Throwable) {
+                    XposedHelpers.findClass("com.android.systemui.statusbar.phone.NavigationBarView", lpparam.classLoader)
+                }
+            }
+
+            // Re-hide whenever nav buttons get updated
+            XposedHelpers.findAndHookMethod(
+                navBarViewClass,
+                "updateNavButtonIcons",
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        if (!isHideNavbarEnabled()) return
+                        val view = param.thisObject as? ViewGroup ?: return
+                        hideHomeHandle(view, "updateNavButtonIcons")
+                    }
+                }
+            )
+
+            XposedHelpers.findAndHookMethod(
+                navBarViewClass,
+                "updateStates",
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        if (!isHideNavbarEnabled()) return
+                        val view = param.thisObject as? ViewGroup ?: return
+                        hideHomeHandle(view, "updateStates")
+                    }
+                }
+            )
+
+            XposedHelpers.findAndHookMethod(
+                navBarViewClass,
+                "onLayout",
+                Boolean::class.javaPrimitiveType,
+                Int::class.javaPrimitiveType,
+                Int::class.javaPrimitiveType,
+                Int::class.javaPrimitiveType,
+                Int::class.javaPrimitiveType,
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        if (!isHideNavbarEnabled()) return
+                        val view = param.thisObject as? ViewGroup ?: return
+                        hideHomeHandle(view, "onLayout")
+                    }
+                }
+            )
+
+        } catch (t: Throwable) {
+            XposedBridge.log("NothingXpert: Failed to install hide navbar hook: $t")
+        }
+    }
+
+    private fun hideHomeHandle(navBarView: ViewGroup, source: String) {
+        val handle = navBarView.findViewById<View?>(navBarView.resources.getIdentifier("home_handle", "id", "com.android.systemui"))
+            ?: navBarView.findViewById<View?>(navBarView.resources.getIdentifier("home_handle", "id", "com.android.systemui.res"))
+        if (handle != null) {
+            var changed = false
+            if (handle.visibility != View.GONE) {
+                handle.visibility = View.GONE
+                changed = true
+            }
+            if (handle.alpha != 0f) {
+                handle.alpha = 0f
+                changed = true
+            }
+            val lp = handle.layoutParams
+            if (lp != null && lp.height != 0) {
+                lp.height = 0
+                handle.layoutParams = lp
+                changed = true
+            }
+            if (changed) {
+                (handle.parent as? ViewGroup)?.requestLayout()
+                XposedBridge.log("NothingXpert: Hiding home_handle from $source")
+            }
+        }
+    }
+
+    private fun disableDecorFitsSystemWindows(window: android.view.Window) {
+        try {
+            val method = window.javaClass.getMethod("setDecorFitsSystemWindows", Boolean::class.javaPrimitiveType)
+            method.invoke(window, false)
+        } catch (_: Throwable) {
+        }
+    }
+
+    private fun zeroBottomPaddingUp(view: View?, depth: Int = 3) {
+        var current: Any? = view
+        repeat(depth) {
+            val v = current as? View ?: return
+            if (v.paddingBottom != 0) {
+                v.setPadding(v.paddingLeft, v.paddingTop, v.paddingRight, 0)
+            }
+            current = v.parent
+        }
+    }
+
+    private fun stripImeBottomInset(root: View) {
+        val navBarHeight = getNavBarHeight(root) ?: return
+        if (root.height <= 0) return
+        var changed = false
+        fun visit(v: View) {
+            if (v is ViewGroup) {
+                for (i in 0 until v.childCount) {
+                    visit(v.getChildAt(i))
+                }
+            }
+            val name = runCatching { v.resources.getResourceEntryName(v.id) }.getOrNull()?.lowercase()
+            val lp = v.layoutParams
+            val heightMatches = v.height == navBarHeight || lp?.height == navBarHeight
+            val nearBottom = v.bottom >= (root.height - navBarHeight - 4)
+            val nameMatches = name?.contains("nav") == true ||
+                name?.contains("gesture") == true ||
+                name?.contains("ime") == true ||
+                name?.contains("inset") == true ||
+                name?.contains("bar") == true
+            val isSpacer = v.javaClass.name.endsWith("Space")
+            val isInputView = v.javaClass.name.contains("inputview.InputView")
+            if (isInputView && v.paddingBottom != 0) {
+                if (adjustImeInputViewPadding(v)) {
+                    changed = true
+                }
+                return
+            }
+            if (nearBottom && (heightMatches || nameMatches || isSpacer)) {
+                v.visibility = View.GONE
+                v.alpha = 0f
+                if (lp != null && lp.height != 0) {
+                    lp.height = 0
+                    v.layoutParams = lp
+                }
+                if (lp is ViewGroup.MarginLayoutParams && lp.bottomMargin != 0) {
+                    lp.bottomMargin = 0
+                    v.layoutParams = lp
+                }
+                if (v.paddingBottom != 0) {
+                    v.setPadding(v.paddingLeft, v.paddingTop, v.paddingRight, 0)
+                }
+                changed = true
+            }
+        }
+        visit(root)
+        if (root.paddingBottom != 0) {
+            root.setPadding(root.paddingLeft, root.paddingTop, root.paddingRight, 0)
+            changed = true
+        }
+        if (changed) {
+            root.requestLayout()
+        }
+    }
+
+    private fun adjustImeInputViewPadding(root: View): Boolean {
+        var changed = false
+        val navBarHeight = getNavBarHeight(root) ?: 0
+        val minPad = dpToPx(root, 8)
+        val target = if (navBarHeight > 0) {
+            kotlin.math.max(minPad, navBarHeight / 4)
+        } else {
+            minPad
+        }
+        fun visit(v: View) {
+            if (v is ViewGroup) {
+                for (i in 0 until v.childCount) {
+                    visit(v.getChildAt(i))
+                }
+            }
+            val className = v.javaClass.name
+            val isInputView = className.contains("inputview.InputView")
+            if (isInputView && v.paddingBottom > target) {
+                v.setPadding(v.paddingLeft, v.paddingTop, v.paddingRight, target)
+                changed = true
+            }
+        }
+        visit(root)
+        if (changed) {
+            root.requestLayout()
+        }
+        return changed
+    }
+
+    private fun dpToPx(view: View, dp: Int): Int {
+        val density = view.resources.displayMetrics.density
+        return (dp * density).toInt().coerceAtLeast(1)
+    }
+
+    private fun dumpImeBottomViews(root: View) {
+        val navBarHeight = getNavBarHeight(root) ?: return
+        if (root.height <= 0) return
+        val maxLogs = 30
+        var logs = 0
+        fun visit(v: View) {
+            if (logs >= maxLogs) return
+            if (v is ViewGroup) {
+                for (i in 0 until v.childCount) {
+                    visit(v.getChildAt(i))
+                    if (logs >= maxLogs) return
+                }
+            }
+            val name = runCatching { v.resources.getResourceEntryName(v.id) }.getOrNull()
+            val lp = v.layoutParams
+            val bottomMargin = (lp as? ViewGroup.MarginLayoutParams)?.bottomMargin ?: 0
+            val nearBottom = v.bottom >= (root.height - navBarHeight - 4)
+            val heightMatches = v.height == navBarHeight || lp?.height == navBarHeight
+            val paddingBottom = v.paddingBottom
+            if (nearBottom && (heightMatches || bottomMargin > 0 || paddingBottom > 0)) {
+                XposedBridge.log(
+                    "NothingXpert: IME bottom view " +
+                        "name=$name class=${v.javaClass.name} " +
+                        "h=${v.height} lpH=${lp?.height} bottom=${v.bottom} " +
+                        "padB=$paddingBottom marginB=$bottomMargin"
+                )
+                logs++
+            }
+        }
+        visit(root)
+        XposedBridge.log("NothingXpert: IME bottom view dump done (count=$logs)")
+    }
+
+    private fun getNavBarHeight(view: View): Int? {
+        val res = view.resources
+        val id = res.getIdentifier("navigation_bar_height", "dimen", "android")
+        if (id == 0) return null
+        return runCatching { res.getDimensionPixelSize(id) }.getOrNull()
     }
 
     private fun isStatusBarDoubleTapEnabled(): Boolean {
