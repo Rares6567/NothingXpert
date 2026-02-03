@@ -23,11 +23,7 @@ import android.widget.TextView
 import android.view.Gravity
 import android.graphics.Color
 import android.widget.FrameLayout
-import android.hardware.biometrics.BiometricPrompt
-import android.os.CancellationSignal
 import android.view.inputmethod.EditorInfo
-import java.util.concurrent.Executor
-import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import de.robv.android.xposed.XSharedPreferences
 import kotlin.math.abs
@@ -280,6 +276,7 @@ class HookEntry : IXposedHookLoadPackage {
         // Policy-level hooks live in system_server ("android" package).
         if (lpparam.packageName == "android") {
             installPolicyVolumeHooks(lpparam)
+            installInputManagerVolumeHook(lpparam)
             startCpuReporter(lpparam)
             registerImeToggleReceiver()
             return
@@ -979,6 +976,32 @@ class HookEntry : IXposedHookLoadPackage {
         if (dispatchHooked) policyVolumeInstalled = true
     }
 
+    private fun installInputManagerVolumeHook(lpparam: XC_LoadPackage.LoadPackageParam) {
+        try {
+            XposedHelpers.findAndHookMethod(
+                "com.android.server.wm.InputManagerCallback",
+                lpparam.classLoader,
+                "interceptKeyBeforeQueueing",
+                KeyEvent::class.java,
+                Int::class.javaPrimitiveType,
+                object : XC_MethodHook() {
+                    override fun beforeHookedMethod(param: MethodHookParam) {
+                        val event = param.args.getOrNull(0) as? KeyEvent ?: return
+                        val ctx = getSystemContext() ?: return
+                        val pm = ctx.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return
+                        runnableContext = ctx
+                        if (handleVolumeForTracks(event, pm, ctx)) {
+                            XposedBridge.log("NothingXpert: InputManagerCallback consumed")
+                            param.result = 0
+                        }
+                    }
+                }
+            )
+        } catch (t: Throwable) {
+            XposedBridge.log("NothingXpert: InputManagerCallback hook failed: $t")
+        }
+    }
+
     private fun tryStripFlagSecure(cl: ClassLoader, clazz: String, method: String) {
         tryStripFlagSecure(cl, clazz, method, View::class.java, ViewGroup.LayoutParams::class.java)
     }
@@ -1068,9 +1091,35 @@ class HookEntry : IXposedHookLoadPackage {
     }
 
     private fun isAppLocked(packageName: String): Boolean {
+        // Try device-encrypted storage first
         try {
-            val file = java.io.File("/data/user_de/0/$MODULE_PKG/shared_prefs/${MODULE_PKG}_preferences.xml")
-            val xsp = if (file.exists()) XSharedPreferences(file) else XSharedPreferences(MODULE_PKG, "${MODULE_PKG}_preferences")
+            val deFile = java.io.File("/data/user_de/0/$MODULE_PKG/shared_prefs/${MODULE_PKG}_preferences.xml")
+            if (deFile.exists() && deFile.canRead()) {
+                val xsp = XSharedPreferences(deFile)
+                xsp.makeWorldReadable()
+                if (xsp.hasFileChanged()) xsp.reload()
+                val lockedSet = xsp.getStringSet("pref_locked_packages", emptySet())
+                if (lockedSet?.contains(packageName) == true) return true
+            }
+        } catch (_: Throwable) {
+        }
+
+        // Try credential-encrypted storage
+        try {
+            val ceFile = java.io.File("/data/data/$MODULE_PKG/shared_prefs/${MODULE_PKG}_preferences.xml")
+            if (ceFile.exists() && ceFile.canRead()) {
+                val xsp = XSharedPreferences(ceFile)
+                xsp.makeWorldReadable()
+                if (xsp.hasFileChanged()) xsp.reload()
+                val lockedSet = xsp.getStringSet("pref_locked_packages", emptySet())
+                if (lockedSet?.contains(packageName) == true) return true
+            }
+        } catch (_: Throwable) {
+        }
+
+        // Fallback to standard XSharedPreferences
+        try {
+            val xsp = XSharedPreferences(MODULE_PKG, "${MODULE_PKG}_preferences")
             xsp.makeWorldReadable()
             if (xsp.hasFileChanged()) xsp.reload()
             val lockedSet = xsp.getStringSet("pref_locked_packages", emptySet())
@@ -1187,39 +1236,69 @@ class HookEntry : IXposedHookLoadPackage {
     }
 
     private fun getVolumeUpAction(): Int {
-        try {
-            val file = java.io.File("/data/user_de/0/$MODULE_PKG/shared_prefs/${MODULE_PKG}_preferences.xml")
-            val xsp = if (file.exists()) XSharedPreferences(file) else XSharedPreferences(MODULE_PKG, "${MODULE_PKG}_preferences")
-            xsp.makeWorldReadable()
-            if (xsp.hasFileChanged()) xsp.reload()
-            if (xsp.contains(PREF_VOLUME_UP_ACTION)) {
-                return xsp.getString(PREF_VOLUME_UP_ACTION, "0")?.toIntOrNull() ?: ACTION_DEFAULT
-            }
-        } catch (_: Throwable) {
-        }
-        val app = currentApplication() ?: return ACTION_DEFAULT
-        val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(app)
-        return prefs.getString(PREF_VOLUME_UP_ACTION, "0")?.toIntOrNull() ?: ACTION_DEFAULT
+        return getPreferenceString(PREF_VOLUME_UP_ACTION, "0").toIntOrNull() ?: ACTION_DEFAULT
     }
 
     private fun getVolumeDownAction(): Int {
-        try {
-            val file = java.io.File("/data/user_de/0/$MODULE_PKG/shared_prefs/${MODULE_PKG}_preferences.xml")
-            val xsp = if (file.exists()) XSharedPreferences(file) else XSharedPreferences(MODULE_PKG, "${MODULE_PKG}_preferences")
-            xsp.makeWorldReadable()
-            if (xsp.hasFileChanged()) xsp.reload()
-            if (xsp.contains(PREF_VOLUME_DOWN_ACTION)) {
-                return xsp.getString(PREF_VOLUME_DOWN_ACTION, "0")?.toIntOrNull() ?: ACTION_DEFAULT
-            }
-        } catch (_: Throwable) {
-        }
-        val app = currentApplication() ?: return ACTION_DEFAULT
-        val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(app)
-        return prefs.getString(PREF_VOLUME_DOWN_ACTION, "0")?.toIntOrNull() ?: ACTION_DEFAULT
+        return getPreferenceString(PREF_VOLUME_DOWN_ACTION, "0").toIntOrNull() ?: ACTION_DEFAULT
     }
 
-    private fun sendMediaCommand(keyCode: Int, context: Context? = currentApplication()): Boolean {
-        val audio = context?.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return false
+    private fun getPreferenceString(key: String, defValue: String): String {
+        // Try device-encrypted storage first (accessible before unlock)
+        try {
+            val deFile = java.io.File("/data/user_de/0/$MODULE_PKG/shared_prefs/${MODULE_PKG}_preferences.xml")
+            if (deFile.exists() && deFile.canRead()) {
+                val xsp = XSharedPreferences(deFile)
+                xsp.makeWorldReadable()
+                if (xsp.hasFileChanged()) xsp.reload()
+                val value = xsp.getString(key, null)
+                if (value != null) {
+                    return value
+                }
+            }
+        } catch (t: Throwable) {
+            XposedBridge.log("NothingXpert: getPreferenceString DE failed for $key: $t")
+        }
+
+        // Try credential-encrypted storage
+        try {
+            val ceFile = java.io.File("/data/data/$MODULE_PKG/shared_prefs/${MODULE_PKG}_preferences.xml")
+            if (ceFile.exists() && ceFile.canRead()) {
+                val xsp = XSharedPreferences(ceFile)
+                xsp.makeWorldReadable()
+                if (xsp.hasFileChanged()) xsp.reload()
+                val value = xsp.getString(key, null)
+                if (value != null) {
+                    return value
+                }
+            }
+        } catch (t: Throwable) {
+            XposedBridge.log("NothingXpert: getPreferenceString CE failed for $key: $t")
+        }
+
+        // Fallback to standard XSharedPreferences with package name
+        try {
+            val xsp = XSharedPreferences(MODULE_PKG, "${MODULE_PKG}_preferences")
+            xsp.makeWorldReadable()
+            if (xsp.hasFileChanged()) xsp.reload()
+            val value = xsp.getString(key, null)
+            if (value != null) {
+                return value
+            }
+        } catch (t: Throwable) {
+            XposedBridge.log("NothingXpert: getPreferenceString XSP failed for $key: $t")
+        }
+
+        return defValue
+    }
+
+    private fun sendMediaCommand(keyCode: Int, context: Context?): Boolean {
+        val ctx = context ?: runnableContext ?: getSystemContext()
+        val audio = ctx?.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+        if (audio == null) {
+            XposedBridge.log("NothingXpert: sendMediaCommand AudioManager is null, context=$ctx")
+            return false
+        }
         return try {
             val down = KeyEvent(SystemClock.uptimeMillis(), SystemClock.uptimeMillis(), KeyEvent.ACTION_DOWN, keyCode, 0)
             val up = KeyEvent(SystemClock.uptimeMillis(), SystemClock.uptimeMillis(), KeyEvent.ACTION_UP, keyCode, 0)
@@ -1233,16 +1312,17 @@ class HookEntry : IXposedHookLoadPackage {
     }
 
     private fun executeVolumeAction(action: Int, context: Context?): Boolean {
+        val ctx = context ?: runnableContext ?: getSystemContext()
         return try {
             when (action) {
                 ACTION_NONE -> true // do nothing, but consume
                 ACTION_TORCH -> {
-                    toggleFlashlight(context)
+                    toggleFlashlight(ctx)
                     true
                 }
-                ACTION_PLAY_PAUSE -> sendMediaCommand(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, context)
-                ACTION_NEXT -> sendMediaCommand(KeyEvent.KEYCODE_MEDIA_NEXT, context)
-                ACTION_PREV -> sendMediaCommand(KeyEvent.KEYCODE_MEDIA_PREVIOUS, context)
+                ACTION_PLAY_PAUSE -> sendMediaCommand(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, ctx)
+                ACTION_NEXT -> sendMediaCommand(KeyEvent.KEYCODE_MEDIA_NEXT, ctx)
+                ACTION_PREV -> sendMediaCommand(KeyEvent.KEYCODE_MEDIA_PREVIOUS, ctx)
                 else -> false
             }
         } catch (t: Throwable) {
@@ -1253,9 +1333,10 @@ class HookEntry : IXposedHookLoadPackage {
 
     private fun toggleFlashlight(context: Context?) {
         try {
-            val cameraManager = context?.getSystemService(Context.CAMERA_SERVICE) as? android.hardware.camera2.CameraManager
+            val ctx = context ?: runnableContext ?: getSystemContext()
+            val cameraManager = ctx?.getSystemService(Context.CAMERA_SERVICE) as? android.hardware.camera2.CameraManager
             if (cameraManager == null) {
-                XposedBridge.log("NothingXpert: CameraManager is null")
+                XposedBridge.log("NothingXpert: CameraManager is null, context=$ctx")
                 return
             }
             val cameraId = cameraManager.cameraIdList.firstOrNull { id ->
@@ -1315,6 +1396,9 @@ class HookEntry : IXposedHookLoadPackage {
         val screenOff = !powerManager.isInteractive
         if (!screenOff) return false
 
+        if (isVolumeEventHandled(event)) return true
+        markVolumeEventHandled(event)
+
         if (context != null) runnableContext = context
 
         val eventAction = event.action
@@ -1335,21 +1419,61 @@ class HookEntry : IXposedHookLoadPackage {
                         handler.postDelayed(skipDownRunnable, VOLUME_LONG_PRESS_DELAY_MS)
                     }
                 }
-                return true // always consume to stop volume change
+                return true // consume to stop volume change on long-press candidates
             }
             KeyEvent.ACTION_UP -> {
-                if (code == KeyEvent.KEYCODE_VOLUME_UP) {
+                val longPressFired = if (code == KeyEvent.KEYCODE_VOLUME_UP) {
                     handler.removeCallbacks(skipUpRunnable)
+                    val fired = skipUpSent
                     skipUpSent = false
+                    fired
                 } else {
                     handler.removeCallbacks(skipDownRunnable)
+                    val fired = skipDownSent
                     skipDownSent = false
+                    fired
                 }
-                XposedBridge.log("NothingXpert: vol up reset code=$code")
+                if (!longPressFired) {
+                    val ctx = context ?: getSystemContext()
+                    if (ctx != null) {
+                        adjustShortPressVolume(ctx, code)
+                    }
+                }
+                XposedBridge.log("NothingXpert: vol up reset code=$code longPress=$longPressFired")
                 return true
             }
         }
         return true
+    }
+
+    private fun adjustShortPressVolume(ctx: Context, code: Int) {
+        try {
+            val audio = ctx.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
+            val direction = if (code == KeyEvent.KEYCODE_VOLUME_UP) {
+                AudioManager.ADJUST_RAISE
+            } else {
+                AudioManager.ADJUST_LOWER
+            }
+            audio.adjustSuggestedStreamVolume(
+                direction,
+                AudioManager.USE_DEFAULT_STREAM_TYPE,
+                0
+            )
+        } catch (t: Throwable) {
+            XposedBridge.log("NothingXpert: adjustShortPressVolume failed: $t")
+        }
+    }
+
+    private fun isVolumeEventHandled(event: KeyEvent): Boolean {
+        return event.eventTime == lastHandledVolumeEventTime &&
+            event.action == lastHandledVolumeEventAction &&
+            event.keyCode == lastHandledVolumeEventCode
+    }
+
+    private fun markVolumeEventHandled(event: KeyEvent) {
+        lastHandledVolumeEventTime = event.eventTime
+        lastHandledVolumeEventAction = event.action
+        lastHandledVolumeEventCode = event.keyCode
     }
 
     companion object {
@@ -1461,6 +1585,15 @@ class HookEntry : IXposedHookLoadPackage {
 
         @Volatile
         private var lastCpuIdle: Long = -1
+
+        @Volatile
+        private var lastHandledVolumeEventTime: Long = -1L
+
+        @Volatile
+        private var lastHandledVolumeEventAction: Int = -1
+
+        @Volatile
+        private var lastHandledVolumeEventCode: Int = -1
 
     }
 
@@ -2044,6 +2177,39 @@ class HookEntry : IXposedHookLoadPackage {
             if (now - ts < PREF_CACHE_MS) return v
         }
 
+        // Try device-encrypted storage first (accessible before unlock)
+        try {
+            val deFile = java.io.File("/data/user_de/0/$MODULE_PKG/shared_prefs/${MODULE_PKG}_preferences.xml")
+            if (deFile.exists() && deFile.canRead()) {
+                val xsp = XSharedPreferences(deFile)
+                xsp.makeWorldReadable()
+                if (xsp.hasFileChanged()) xsp.reload()
+                if (xsp.contains(key)) {
+                    val v = xsp.getBoolean(key, defValue)
+                    prefCache[key] = now to v
+                    return v
+                }
+            }
+        } catch (_: Throwable) {
+        }
+
+        // Try credential-encrypted storage
+        try {
+            val ceFile = java.io.File("/data/data/$MODULE_PKG/shared_prefs/${MODULE_PKG}_preferences.xml")
+            if (ceFile.exists() && ceFile.canRead()) {
+                val xsp = XSharedPreferences(ceFile)
+                xsp.makeWorldReadable()
+                if (xsp.hasFileChanged()) xsp.reload()
+                if (xsp.contains(key)) {
+                    val v = xsp.getBoolean(key, defValue)
+                    prefCache[key] = now to v
+                    return v
+                }
+            }
+        } catch (_: Throwable) {
+        }
+
+        // Fallback to standard XSharedPreferences with package name
         try {
             val prefs = XSharedPreferences(MODULE_PKG, "${MODULE_PKG}_preferences")
             prefs.makeWorldReadable()
@@ -2055,18 +2221,6 @@ class HookEntry : IXposedHookLoadPackage {
             }
         } catch (_: Throwable) {
         }
-
-        try {
-            val app = currentApplication()
-            if (app != null) {
-                val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(app)
-                if (prefs.contains(key)) {
-                    val v = prefs.getBoolean(key, defValue)
-                    prefCache[key] = now to v
-                    return v
-                }
-            }
-        } catch (_: Throwable) { }
 
         prefCache[key] = now to defValue
         return defValue

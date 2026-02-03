@@ -12,7 +12,10 @@ class MiscSettingsFragment : PreferenceFragmentCompat() {
     private val prefListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
         // Delay to allow async apply() to write file, then fix permissions
         android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-            if (isAdded) PreferenceUtils.fixPermissions(requireContext())
+            if (isAdded) {
+                PrefsUtil.ensurePrefsAccessible(requireContext())
+                PreferenceUtils.fixPermissions(requireContext())
+            }
         }, 100)
         if (key == HookEntry.PREF_HIDE_IME_BAR) {
             val enabled = prefs?.getBoolean(HookEntry.PREF_HIDE_IME_BAR, false) ?: false
@@ -49,14 +52,14 @@ class MiscSettingsFragment : PreferenceFragmentCompat() {
         preferenceManager.sharedPreferencesMode = Context.MODE_WORLD_READABLE
         setPreferencesFromResource(R.xml.misc_preferences, rootKey)
         PreferenceUtils.fixPermissions(requireContext())
-        PrefsUtil.makeWorldReadable(requireContext())
+        PrefsUtil.ensurePrefsAccessible(requireContext())
     }
 
     override fun onResume() {
         super.onResume()
         preferenceManager.sharedPreferences?.registerOnSharedPreferenceChangeListener(prefListener)
         PreferenceUtils.fixPermissions(requireContext())
-        PrefsUtil.makeWorldReadable(requireContext())
+        PrefsUtil.ensurePrefsAccessible(requireContext())
     }
 
     override fun onPause() {
