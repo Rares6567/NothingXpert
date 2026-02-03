@@ -110,6 +110,7 @@ class HookEntry : IXposedHookLoadPackage, XPrefs.OnPreferenceUpdateListener {
         }
     }
 
+    @Suppress("UNUSED_PARAMETER")
     private fun startCpuReporter(lpparam: XC_LoadPackage.LoadPackageParam) {
         try {
             val at = Class.forName("android.app.ActivityThread")
@@ -174,8 +175,8 @@ class HookEntry : IXposedHookLoadPackage, XPrefs.OnPreferenceUpdateListener {
         return (((totalDiff - idleDiff).toDouble() / totalDiff.toDouble()) * 100.0).toInt().coerceIn(0, 100)
     }
 
+    @Suppress("UNUSED_PARAMETER")
     private fun readCpuTemp(context: Context): Int? {
-        // try standard thermal zones
         for (i in 0..120) {
             val type = try {
                 java.io.File("/sys/class/thermal/thermal_zone$i/type").readText().trim().lowercase()
@@ -1719,10 +1720,9 @@ class HookEntry : IXposedHookLoadPackage, XPrefs.OnPreferenceUpdateListener {
                             }
                         )
 
-                        // Set touch listener for gesture detection
-                        statusBarView.setOnTouchListener { v, event ->
+                        statusBarView.setOnTouchListener { _, event ->
                             gestureDetector.onTouchEvent(event)
-                            false  // Don't consume the event, let it propagate
+                            false
                         }
 
                         XposedBridge.log("NothingXpert: Status bar double-tap hook installed")
@@ -1774,7 +1774,7 @@ class HookEntry : IXposedHookLoadPackage, XPrefs.OnPreferenceUpdateListener {
         try {
             val dialog = XposedHelpers.callMethod(ims, "getWindow") as? android.app.Dialog ?: return
             val window = dialog.window ?: return
-            val decor = window.decorView ?: return
+            val decor = window.decorView
             val ids = listOf("input_method_nav_bar", "input_method_nav_back", "input_method_nav_ime_switcher")
             var hiddenAny = false
             for (name in ids) {
@@ -1783,7 +1783,7 @@ class HookEntry : IXposedHookLoadPackage, XPrefs.OnPreferenceUpdateListener {
                 val v = decor.findViewById<View>(id) ?: continue
                 v.visibility = View.GONE
                 v.alpha = 0f
-                v.layoutParams = v.layoutParams?.apply { height = 0 }
+                v.layoutParams?.let { lp -> lp.height = 0 }
                 (v.parent as? ViewGroup)?.requestLayout()
                 zeroBottomPaddingUp(v)
                 hiddenAny = true
