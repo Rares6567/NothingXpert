@@ -60,4 +60,7 @@ dependencies {
 	implementation("androidx.core:core-ktx:1.12.0")
 	implementation("androidx.preference:preference-ktx:1.2.1")
 	implementation("com.google.android.material:material:1.11.0")
+	
+	// RemotePreferences for cross-process preference access (enables real-time preference updates)
+	implementation("com.crossbowffs.remotepreferences:remotepreferences:0.8")
 }

@@ -86,5 +86,13 @@
             </intent-filter>
         </receiver>
 
+        <!-- ContentProvider for cross-process preference access -->
+        <!-- This enables real-time preference updates without requiring target app restart -->
+        <provider
+            android:name=".RemotePrefProvider"
+            android:authorities="com.nothingxpert"
+            android:directBootAware="true"
+            android:exported="true" />
+
     </application>
 </manifest>

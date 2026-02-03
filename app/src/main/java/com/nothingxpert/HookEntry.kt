@@ -35,8 +35,12 @@ import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
 
-class HookEntry : IXposedHookLoadPackage {
+class HookEntry : IXposedHookLoadPackage, XPrefs.OnPreferenceUpdateListener {
     private val handler by lazy { Handler(Looper.getMainLooper()) }
+    
+    // Flag to track if XPrefs (RemotePreferences) is available
+    @Volatile
+    private var useRemotePrefs = false
 
     private val skipUpRunnable = Runnable {
         if (!skipUpSent) {
@@ -298,6 +302,9 @@ class HookEntry : IXposedHookLoadPackage {
         }
 
         if (lpparam.packageName != SYSTEMUI_PKG) return
+
+        // Initialize RemotePreferences for real-time preference updates
+        initializeXPrefs(lpparam)
 
         try {
             systemUiClassLoader = lpparam.classLoader
@@ -1192,7 +1199,43 @@ class HookEntry : IXposedHookLoadPackage {
         }
     }
 
+    private fun initializeXPrefs(lpparam: XC_LoadPackage.LoadPackageParam) {
+        try {
+            XposedHelpers.findAndHookMethod(
+                SYSTEMUI_APP_CLASS,
+                lpparam.classLoader,
+                "onCreate",
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        val context = param.thisObject as? Context ?: return
+                        try {
+                            XPrefs.init(context.applicationContext)
+                            XPrefs.addOnPreferenceUpdateListener(this@HookEntry)
+                            XPrefs.registerPreferenceChangeListener()
+                            useRemotePrefs = true
+                        } catch (t: Throwable) {
+                            XposedBridge.log("NothingXpert: Failed to initialize XPrefs: $t")
+                            useRemotePrefs = false
+                        }
+                    }
+                }
+            )
+        } catch (t: Throwable) {
+            XposedBridge.log("NothingXpert: Failed to hook for XPrefs: $t")
+        }
+    }
 
+    override fun onPreferenceUpdated(key: String?) {
+        synchronized(prefCache) {
+            if (key != null) {
+                prefCache.remove(key)
+                stringPrefCache.remove(key)
+            } else {
+                prefCache.clear()
+                stringPrefCache.clear()
+            }
+        }
+    }
 
     private fun currentApplication(): android.app.Application? {
         return try {
@@ -1244,7 +1287,24 @@ class HookEntry : IXposedHookLoadPackage {
     }
 
     private fun getPreferenceString(key: String, defValue: String): String {
-        // Try device-encrypted storage first (accessible before unlock)
+        val now = SystemClock.uptimeMillis()
+        
+        synchronized(stringPrefCache) {
+            stringPrefCache[key]?.let { (ts, v) ->
+                if (now - ts < PREF_CACHE_MS) return v
+            }
+        }
+
+        if (useRemotePrefs) {
+            try {
+                val v = XPrefs.getString(key, defValue)
+                synchronized(stringPrefCache) {
+                    stringPrefCache[key] = now to v
+                }
+                return v
+            } catch (_: Throwable) {}
+        }
+
         try {
             val deFile = java.io.File("/data/user_de/0/$MODULE_PKG/shared_prefs/${MODULE_PKG}_preferences.xml")
             if (deFile.exists() && deFile.canRead()) {
@@ -1253,14 +1313,14 @@ class HookEntry : IXposedHookLoadPackage {
                 if (xsp.hasFileChanged()) xsp.reload()
                 val value = xsp.getString(key, null)
                 if (value != null) {
+                    synchronized(stringPrefCache) {
+                        stringPrefCache[key] = now to value
+                    }
                     return value
                 }
             }
-        } catch (t: Throwable) {
-            XposedBridge.log("NothingXpert: getPreferenceString DE failed for $key: $t")
-        }
+        } catch (_: Throwable) {}
 
-        // Try credential-encrypted storage
         try {
             val ceFile = java.io.File("/data/data/$MODULE_PKG/shared_prefs/${MODULE_PKG}_preferences.xml")
             if (ceFile.exists() && ceFile.canRead()) {
@@ -1269,26 +1329,30 @@ class HookEntry : IXposedHookLoadPackage {
                 if (xsp.hasFileChanged()) xsp.reload()
                 val value = xsp.getString(key, null)
                 if (value != null) {
+                    synchronized(stringPrefCache) {
+                        stringPrefCache[key] = now to value
+                    }
                     return value
                 }
             }
-        } catch (t: Throwable) {
-            XposedBridge.log("NothingXpert: getPreferenceString CE failed for $key: $t")
-        }
+        } catch (_: Throwable) {}
 
-        // Fallback to standard XSharedPreferences with package name
         try {
             val xsp = XSharedPreferences(MODULE_PKG, "${MODULE_PKG}_preferences")
             xsp.makeWorldReadable()
             if (xsp.hasFileChanged()) xsp.reload()
             val value = xsp.getString(key, null)
             if (value != null) {
+                synchronized(stringPrefCache) {
+                    stringPrefCache[key] = now to value
+                }
                 return value
             }
-        } catch (t: Throwable) {
-            XposedBridge.log("NothingXpert: getPreferenceString XSP failed for $key: $t")
-        }
+        } catch (_: Throwable) {}
 
+        synchronized(stringPrefCache) {
+            stringPrefCache[key] = now to defValue
+        }
         return defValue
     }
 
@@ -1517,6 +1581,7 @@ class HookEntry : IXposedHookLoadPackage {
         const val DOUBLE_TAP_WAKE_SLOP_PX = 120
         private const val PREF_CACHE_MS = 5_000L
         private val prefCache = HashMap<String, Pair<Long, Boolean>>()
+        private val stringPrefCache = HashMap<String, Pair<Long, String>>()
         private val imeDumpOnce = AtomicBoolean(false)
         @Volatile private var imeReceiverRegistered = false
         
@@ -2173,11 +2238,23 @@ class HookEntry : IXposedHookLoadPackage {
 
     private fun getPreferenceBoolean(key: String, defValue: Boolean): Boolean {
         val now = SystemClock.uptimeMillis()
-        prefCache[key]?.let { (ts, v) ->
-            if (now - ts < PREF_CACHE_MS) return v
+        
+        synchronized(prefCache) {
+            prefCache[key]?.let { (ts, v) ->
+                if (now - ts < PREF_CACHE_MS) return v
+            }
         }
 
-        // Try device-encrypted storage first (accessible before unlock)
+        if (useRemotePrefs) {
+            try {
+                val v = XPrefs.getBoolean(key, defValue)
+                synchronized(prefCache) {
+                    prefCache[key] = now to v
+                }
+                return v
+            } catch (_: Throwable) {}
+        }
+
         try {
             val deFile = java.io.File("/data/user_de/0/$MODULE_PKG/shared_prefs/${MODULE_PKG}_preferences.xml")
             if (deFile.exists() && deFile.canRead()) {
@@ -2186,14 +2263,14 @@ class HookEntry : IXposedHookLoadPackage {
                 if (xsp.hasFileChanged()) xsp.reload()
                 if (xsp.contains(key)) {
                     val v = xsp.getBoolean(key, defValue)
-                    prefCache[key] = now to v
+                    synchronized(prefCache) {
+                        prefCache[key] = now to v
+                    }
                     return v
                 }
             }
-        } catch (_: Throwable) {
-        }
+        } catch (_: Throwable) {}
 
-        // Try credential-encrypted storage
         try {
             val ceFile = java.io.File("/data/data/$MODULE_PKG/shared_prefs/${MODULE_PKG}_preferences.xml")
             if (ceFile.exists() && ceFile.canRead()) {
@@ -2202,27 +2279,30 @@ class HookEntry : IXposedHookLoadPackage {
                 if (xsp.hasFileChanged()) xsp.reload()
                 if (xsp.contains(key)) {
                     val v = xsp.getBoolean(key, defValue)
-                    prefCache[key] = now to v
+                    synchronized(prefCache) {
+                        prefCache[key] = now to v
+                    }
                     return v
                 }
             }
-        } catch (_: Throwable) {
-        }
+        } catch (_: Throwable) {}
 
-        // Fallback to standard XSharedPreferences with package name
         try {
             val prefs = XSharedPreferences(MODULE_PKG, "${MODULE_PKG}_preferences")
             prefs.makeWorldReadable()
             if (prefs.hasFileChanged()) prefs.reload()
             if (prefs.contains(key)) {
                 val v = prefs.getBoolean(key, defValue)
-                prefCache[key] = now to v
+                synchronized(prefCache) {
+                    prefCache[key] = now to v
+                }
                 return v
             }
-        } catch (_: Throwable) {
-        }
+        } catch (_: Throwable) {}
 
-        prefCache[key] = now to defValue
+        synchronized(prefCache) {
+            prefCache[key] = now to defValue
+        }
         return defValue
     }
 }
