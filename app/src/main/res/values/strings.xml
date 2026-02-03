@@ -19,6 +19,8 @@
     <string name="pref_shake_torch_summary">Shake the phone when the screen is off to turn the flashlight on or off</string>
     <string name="pref_hide_ime_bar_title">Remove empty space from Gboard</string>
     <string name="pref_hide_ime_bar_summary">Remove the globe/arrow strip above the keyboard</string>
+    <string name="pref_double_tap_wake_title">Double tap to wake</string>
+    <string name="pref_double_tap_wake_summary">Disable single tap to wake and require double tap</string>
     <string name="app_lock_title">App Lock</string>
     <string name="app_lock_summary">Pick which apps should ask for unlock</string>
     <string name="app_lock_sort">Sort</string>

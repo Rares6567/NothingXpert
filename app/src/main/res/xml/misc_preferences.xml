@@ -32,6 +32,14 @@
             android:title="@string/pref_hide_ime_bar_title"
             app:iconSpaceReserved="false" />
 
+        <com.nothingxpert.ui.preferences.MaterialSwitchPreference
+            android:defaultValue="false"
+            android:key="pref_double_tap_wake"
+            android:summaryOn="@string/pref_double_tap_wake_summary"
+            android:summaryOff="@string/pref_double_tap_wake_summary"
+            android:title="@string/pref_double_tap_wake_title"
+            app:iconSpaceReserved="false" />
+
     </com.nothingxpert.ui.preferences.MaterialPreferenceCategory>
 
 	<com.nothingxpert.ui.preferences.MaterialPreferenceCategory

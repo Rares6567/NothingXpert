@@ -196,9 +196,18 @@ class HookEntry : IXposedHookLoadPackage {
         if (screenOffReceiverRegistered) return
         val ctx = currentApplication() ?: return
         try {
-            val filter = android.content.IntentFilter(Intent.ACTION_SCREEN_OFF)
+            val filter = android.content.IntentFilter().apply {
+                addAction(Intent.ACTION_SCREEN_OFF)
+                addAction(Intent.ACTION_SCREEN_ON)
+            }
             val receiver = object : android.content.BroadcastReceiver() {
                 override fun onReceive(context: Context?, intent: Intent?) {
+                    lastWakeTapTs = 0L
+                    lastWakeTapX = -1
+                    lastWakeTapY = -1
+                    if (intent?.action == Intent.ACTION_SCREEN_OFF) {
+                        lastScreenOffTs = SystemClock.uptimeMillis()
+                    }
                     unlockedPackages.clear()
                     xlog("NothingXpert: Cleared app-lock cache on screen off")
                 }
@@ -340,6 +349,7 @@ class HookEntry : IXposedHookLoadPackage {
         }
 
         installHideNavbarHook(lpparam)
+        installTapToWakeRemapHook(lpparam)
 
         try {
             // Also hook the ViewModel as a safety net in case the interactor path changes.
@@ -1188,6 +1198,10 @@ class HookEntry : IXposedHookLoadPackage {
         return getPreferenceBoolean(PREF_HIDE_IME_BAR, false)
     }
 
+    private fun isDoubleTapWakeEnabled(): Boolean {
+        return getPreferenceBoolean(PREF_DOUBLE_TAP_WAKE, false)
+    }
+
     private fun isDebugLogsEnabled(): Boolean {
         debugLogsOverride?.let { return it }
         return getPreferenceBoolean(PREF_DEBUG_LOGS, false)
@@ -1396,6 +1410,7 @@ class HookEntry : IXposedHookLoadPackage {
         const val PREF_SHUFFLE_PIN = "pref_shuffle_pin"
         const val PREF_SHAKE_TORCH = "pref_shake_torch"
         const val PREF_HIDE_IME_BAR = "pref_hide_ime_bar"
+        const val PREF_DOUBLE_TAP_WAKE = "pref_double_tap_wake"
         const val PREF_DEBUG_LOGS = "pref_debug_logs"
         const val ACTION_DEBUG_LOGS_TOGGLED = "com.nothingxpert.action.DEBUG_LOGS_TOGGLED"
         const val EXTRA_DEBUG_LOGS_ENABLED = "enabled"
@@ -1407,6 +1422,9 @@ class HookEntry : IXposedHookLoadPackage {
         const val VOLUME_LONG_PRESS_DELAY_MS = 350L
         const val SHAKE_THRESHOLD = 19.5f
         const val SHAKE_COOLDOWN_MS = 1500L
+        const val DOUBLE_TAP_WAKE_WINDOW_MS = 350L
+        const val DOUBLE_TAP_WAKE_ARM_DELAY_MS = 900L
+        const val DOUBLE_TAP_WAKE_SLOP_PX = 120
         private const val PREF_CACHE_MS = 5_000L
         private val prefCache = HashMap<String, Pair<Long, Boolean>>()
         private val imeDumpOnce = AtomicBoolean(false)
@@ -1427,6 +1445,19 @@ class HookEntry : IXposedHookLoadPackage {
 
         @Volatile
         private var blockTouchesUntil: Long = 0L
+
+        @Volatile
+        private var lastWakeTapTs: Long = 0L
+
+        @Volatile
+        private var lastScreenOffTs: Long = 0L
+
+        @Volatile
+        private var lastWakeTapX: Int = -1
+
+        @Volatile
+        private var lastWakeTapY: Int = -1
+
 
         @Volatile
         private var systemUiClassLoader: ClassLoader? = null
@@ -1705,6 +1736,166 @@ class HookEntry : IXposedHookLoadPackage {
             xlog("NothingXpert: Failed to install hide navbar hook: $t")
         }
     }
+
+    private fun installTapToWakeRemapHook(lpparam: XC_LoadPackage.LoadPackageParam) {
+        try {
+            val hostClass = "com.nothing.systemui.statusbar.phone.DozeServiceHostEx"
+            XposedBridge.log("NothingXpert: Installing tap-to-wake remap hook (DozeServiceHostEx.fireSingleTap)")
+            XposedHelpers.findAndHookMethod(
+                hostClass,
+                lpparam.classLoader,
+                "fireSingleTap",
+                object : XC_MethodHook() {
+                    override fun beforeHookedMethod(param: MethodHookParam) {
+                        if (!isDoubleTapWakeEnabled()) return
+                        val ctx = getSystemContext()
+                        val pm = ctx?.getSystemService(Context.POWER_SERVICE) as? PowerManager
+                        if (pm?.isInteractive == true) return
+                        val sinceOff = SystemClock.uptimeMillis() - lastScreenOffTs
+                        if (sinceOff in 0..DOUBLE_TAP_WAKE_ARM_DELAY_MS) return
+                        val now = SystemClock.uptimeMillis()
+                        val delta = now - lastWakeTapTs
+                        if (delta in 1..DOUBLE_TAP_WAKE_WINDOW_MS) {
+                            if (!isSameTapArea()) {
+                                lastWakeTapTs = now
+                                captureLastTapPos()
+                                xlog("NothingXpert: tap too far apart; resetting window")
+                                param.result = null
+                                return
+                            }
+                            lastWakeTapTs = 0L
+                            try {
+                                XposedHelpers.callMethod(param.thisObject, "fireDoubleTap")
+                                xlog("NothingXpert: double-tap wake fired (dt=$delta)")
+                            } catch (t: Throwable) {
+                                xlog("NothingXpert: fireDoubleTap via host failed: $t")
+                            }
+                        } else {
+                            lastWakeTapTs = now
+                            captureLastTapPos()
+                            xlog("NothingXpert: single tap swallowed, waiting for double-tap")
+                        }
+                        param.result = null
+                    }
+                }
+            )
+
+            val kvmClass = "com.nothing.systemui.keyguard.KeyguardViewMediatorEx"
+            XposedBridge.log("NothingXpert: Installing tap-to-wake remap hook (KeyguardViewMediatorEx)")
+            XposedHelpers.findAndHookMethod(
+                kvmClass,
+                lpparam.classLoader,
+                "handleKeyGestureSingleTap",
+                object : XC_MethodHook() {
+                    override fun beforeHookedMethod(param: MethodHookParam) {
+                        if (!isDoubleTapWakeEnabled()) return
+                        val ctx = getSystemContext()
+                        val pm = ctx?.getSystemService(Context.POWER_SERVICE) as? PowerManager
+                        if (pm?.isInteractive == true) return
+                        val sinceOff = SystemClock.uptimeMillis() - lastScreenOffTs
+                        if (sinceOff in 0..DOUBLE_TAP_WAKE_ARM_DELAY_MS) return
+                        val now = SystemClock.uptimeMillis()
+                        val delta = now - lastWakeTapTs
+                        if (delta in 1..DOUBLE_TAP_WAKE_WINDOW_MS) {
+                            if (!isSameTapArea()) {
+                                lastWakeTapTs = now
+                                captureLastTapPos()
+                                xlog("NothingXpert: KVM tap too far apart; resetting window")
+                                param.result = null
+                                return
+                            }
+                            lastWakeTapTs = 0L
+                            try {
+                                XposedHelpers.callMethod(param.thisObject, "handleKeyGestureDoubleTap")
+                                xlog("NothingXpert: double-tap wake fired (KVM dt=$delta)")
+                            } catch (t: Throwable) {
+                                xlog("NothingXpert: handleKeyGestureDoubleTap failed: $t")
+                            }
+                        } else {
+                            lastWakeTapTs = now
+                            captureLastTapPos()
+                            xlog("NothingXpert: KVM single tap swallowed, waiting for double-tap")
+                        }
+                        param.result = null
+                    }
+                }
+            )
+
+            XposedHelpers.findAndHookMethod(
+                kvmClass,
+                lpparam.classLoader,
+                "handleKeyGestureDoubleTap",
+                object : XC_MethodHook() {
+                    override fun beforeHookedMethod(param: MethodHookParam) {
+                        if (!isDoubleTapWakeEnabled()) return
+                        lastWakeTapTs = 0L
+                    }
+                }
+            )
+        } catch (t: Throwable) {
+            XposedBridge.log("NothingXpert: Tap-to-wake remap hook failed: $t")
+            xlog("NothingXpert: Tap-to-wake remap hook failed: $t")
+        }
+    }
+
+    private fun captureLastTapPos() {
+        try {
+            val point = readTapPos() ?: return
+            lastWakeTapX = point.x
+            lastWakeTapY = point.y
+            xlog("NothingXpert: captured tap pos x=${point.x} y=${point.y}")
+        } catch (t: Throwable) {
+            xlog("NothingXpert: capture tap pos failed: $t")
+        }
+    }
+
+    private fun isSameTapArea(): Boolean {
+        if (lastWakeTapX < 0 || lastWakeTapY < 0) return true
+        val point = readTapPos() ?: return false
+        val dx = point.x - lastWakeTapX
+        val dy = point.y - lastWakeTapY
+        val slop = getDoubleTapWakeSlopPx()
+        val ok = (dx * dx + dy * dy) <= (slop * slop)
+        xlog("NothingXpert: tap delta dx=$dx dy=$dy slop=$slop ok=$ok")
+        return ok
+    }
+
+    private fun readTapPos(): android.graphics.Point? {
+        return try {
+            val loader = systemUiClassLoader ?: return null
+            val depClass = XposedHelpers.findClass("com.nothing.systemui.NTDependencyEx", loader)
+            val centralClass = XposedHelpers.findClass(
+                "com.nothing.systemui.statusbar.phone.CentralSurfacesImplEx",
+                loader
+            )
+            val central = XposedHelpers.callStaticMethod(depClass, "get", centralClass)
+            val point = try {
+                XposedHelpers.callMethod(central, "getTapPos") as? android.graphics.Point
+            } catch (_: Throwable) {
+                null
+            }
+            point ?: run {
+                val utilClass = XposedHelpers.findClass("com.nothing.systemui.statusbar.phone.TapPositionUtil", loader)
+                val ctx = getSystemContext() ?: return null
+                XposedHelpers.callStaticMethod(utilClass, "getTapPos", ctx) as? android.graphics.Point
+            }
+        } catch (t: Throwable) {
+            xlog("NothingXpert: readTapPos failed: $t")
+            null
+        }
+    }
+
+    private fun getDoubleTapWakeSlopPx(): Int {
+        val ctx = getSystemContext() ?: return DOUBLE_TAP_WAKE_SLOP_PX
+        return try {
+            val base = android.view.ViewConfiguration.get(ctx).scaledTouchSlop
+            (base * 3).coerceAtLeast(DOUBLE_TAP_WAKE_SLOP_PX)
+        } catch (_: Throwable) {
+            DOUBLE_TAP_WAKE_SLOP_PX
+        }
+    }
+
+
 
     private fun hideHomeHandle(navBarView: ViewGroup, source: String) {
         val handle = navBarView.findViewById<View?>(navBarView.resources.getIdentifier("home_handle", "id", "com.android.systemui"))
