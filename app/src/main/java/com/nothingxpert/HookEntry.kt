@@ -46,7 +46,7 @@ class HookEntry : IXposedHookLoadPackage {
         if (!skipUpSent) {
             val action = getVolumeUpAction()
             val ok = executeVolumeAction(action, runnableContext)
-            xlog("NothingXpert: skipUpRunnable fired action=$action ok=$ok")
+            XposedBridge.log("NothingXpert: skipUpRunnable fired action=$action ok=$ok")
             if (ok) skipUpSent = true
         }
     }
@@ -104,9 +104,9 @@ class HookEntry : IXposedHookLoadPackage {
                 )
             }
             shakeListenerRegistered = true
-            xlog("NothingXpert: shake torch listener registered")
+            XposedBridge.log("NothingXpert: shake torch listener registered")
         } catch (t: Throwable) {
-            xlog("NothingXpert: failed to register shake listener: $t")
+            XposedBridge.log("NothingXpert: failed to register shake listener: $t")
         }
     }
 
@@ -117,7 +117,7 @@ class HookEntry : IXposedHookLoadPackage {
             val sysContext = XposedHelpers.callMethod(thread, "getSystemContext") as? Context ?: return
             if (cpuReporterStarted) return
             cpuReporterStarted = true
-            xlog("NothingXpert: starting CPU reporter")
+            XposedBridge.log("NothingXpert: starting CPU reporter")
             val handler = Handler(Looper.getMainLooper())
             val runnable = object : Runnable {
                 override fun run() {
@@ -136,7 +136,7 @@ class HookEntry : IXposedHookLoadPackage {
             }
             handler.post(runnable)
         } catch (t: Throwable) {
-            xlog("NothingXpert: CPU reporter init failed: $t")
+            XposedBridge.log("NothingXpert: CPU reporter init failed: $t")
         }
     }
 
@@ -209,7 +209,7 @@ class HookEntry : IXposedHookLoadPackage {
                         lastScreenOffTs = SystemClock.uptimeMillis()
                     }
                     unlockedPackages.clear()
-                    xlog("NothingXpert: Cleared app-lock cache on screen off")
+                    XposedBridge.log("NothingXpert: Cleared app-lock cache on screen off")
                 }
             }
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
@@ -219,7 +219,7 @@ class HookEntry : IXposedHookLoadPackage {
             }
             screenOffReceiverRegistered = true
         } catch (t: Throwable) {
-            xlog("NothingXpert: failed to register screen-off receiver: $t")
+            XposedBridge.log("NothingXpert: failed to register screen-off receiver: $t")
         }
     }
 
@@ -240,31 +240,9 @@ class HookEntry : IXposedHookLoadPackage {
                 ctx.registerReceiver(receiver, filter)
             }
             imeReceiverRegistered = true
-            xlog("NothingXpert: IME toggle receiver registered")
+            XposedBridge.log("NothingXpert: IME toggle receiver registered")
         } catch (t: Throwable) {
-            xlog("NothingXpert: Failed to register IME toggle receiver: $t")
-        }
-    }
-
-    private fun registerDebugLogsReceiver() {
-        if (debugReceiverRegistered) return
-        val ctx = getSystemContext() ?: return
-        try {
-            val filter = android.content.IntentFilter(ACTION_DEBUG_LOGS_TOGGLED)
-            val receiver = object : android.content.BroadcastReceiver() {
-                override fun onReceive(context: Context?, intent: Intent?) {
-                    if (intent?.action != ACTION_DEBUG_LOGS_TOGGLED) return
-                    debugLogsOverride = intent.getBooleanExtra(EXTRA_DEBUG_LOGS_ENABLED, false)
-                }
-            }
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                ctx.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
-            } else {
-                ctx.registerReceiver(receiver, filter)
-            }
-            debugReceiverRegistered = true
-        } catch (t: Throwable) {
-            // keep silent if debug logs are off
+            XposedBridge.log("NothingXpert: Failed to register IME toggle receiver: $t")
         }
     }
 
@@ -283,9 +261,9 @@ class HookEntry : IXposedHookLoadPackage {
             val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager ?: return
             val method = am.javaClass.getMethod("forceStopPackage", String::class.java)
             method.invoke(am, pkg)
-            xlog("NothingXpert: force-stopped $pkg")
+            XposedBridge.log("NothingXpert: force-stopped $pkg")
         } catch (t: Throwable) {
-            xlog("NothingXpert: force-stop failed for $pkg: $t")
+            XposedBridge.log("NothingXpert: force-stop failed for $pkg: $t")
         }
     }
 
@@ -293,7 +271,7 @@ class HookEntry : IXposedHookLoadPackage {
         if (!skipDownSent) {
             val action = getVolumeDownAction()
             val ok = executeVolumeAction(action, runnableContext)
-            xlog("NothingXpert: skipDownRunnable fired action=$action ok=$ok")
+            XposedBridge.log("NothingXpert: skipDownRunnable fired action=$action ok=$ok")
             if (ok) skipDownSent = true
         }
     }
@@ -304,7 +282,6 @@ class HookEntry : IXposedHookLoadPackage {
             installPolicyVolumeHooks(lpparam)
             startCpuReporter(lpparam)
             registerImeToggleReceiver()
-            registerDebugLogsReceiver()
             return
         }
 
@@ -328,7 +305,7 @@ class HookEntry : IXposedHookLoadPackage {
         try {
             systemUiClassLoader = lpparam.classLoader
             Log.i(LOG_TAG, "SystemUI loaded, installing hooks")
-            xlog("NothingXpert: SystemUI loaded, installing hooks")
+            XposedBridge.log("NothingXpert: SystemUI loaded, installing hooks")
             XposedHelpers.findAndHookMethod(
                 KEYGUARD_TOUCH_CLASS,
                 lpparam.classLoader,
@@ -345,7 +322,7 @@ class HookEntry : IXposedHookLoadPackage {
                 }
             )
         } catch (t: Throwable) {
-            xlog("NothingXpert: interactor hook setup failed: $t")
+            XposedBridge.log("NothingXpert: interactor hook setup failed: $t")
         }
 
         installHideNavbarHook(lpparam)
@@ -368,13 +345,13 @@ class HookEntry : IXposedHookLoadPackage {
                                 param.result = null
                             }
                         } catch (t: Throwable) {
-                            xlog("NothingXpert: viewmodel hook failed: $t")
+                            XposedBridge.log("NothingXpert: viewmodel hook failed: $t")
                         }
                     }
                 }
             )
         } catch (t: Throwable) {
-            xlog("NothingXpert: viewmodel hook setup failed: $t")
+            XposedBridge.log("NothingXpert: viewmodel hook setup failed: $t")
         }
 
         try {
@@ -396,7 +373,7 @@ class HookEntry : IXposedHookLoadPackage {
                 }
             )
         } catch (t: Throwable) {
-            xlog("NothingXpert: single-tap hook failed: $t")
+            XposedBridge.log("NothingXpert: single-tap hook failed: $t")
         }
 
         try {
@@ -407,7 +384,7 @@ class HookEntry : IXposedHookLoadPackage {
                 object : XC_MethodHook() {
                     override fun afterHookedMethod(param: MethodHookParam) {
                         Log.i(LOG_TAG, "SystemUIApplication.onCreate hooked")
-                        xlog("NothingXpert: SystemUIApplication.onCreate hooked")
+                        XposedBridge.log("NothingXpert: SystemUIApplication.onCreate hooked")
                         (param.thisObject as? Context)?.let { ctx ->
                             runnableContext = ctx.applicationContext
                             registerShakeTorch(ctx.applicationContext)
@@ -416,7 +393,7 @@ class HookEntry : IXposedHookLoadPackage {
                 }
             )
         } catch (t: Throwable) {
-            xlog("NothingXpert: SystemUIApplication hook failed: $t")
+            XposedBridge.log("NothingXpert: SystemUIApplication hook failed: $t")
         }
 
         if (ENABLE_DOUBLE_TAP || isSingleTapEnabled()) {
@@ -447,7 +424,7 @@ class HookEntry : IXposedHookLoadPackage {
                     }
                 )
             } catch (t: Throwable) {
-                xlog("NothingXpert: TouchHandlingView hook failed: $t")
+                XposedBridge.log("NothingXpert: TouchHandlingView hook failed: $t")
             }
         }
 
@@ -464,7 +441,7 @@ class HookEntry : IXposedHookLoadPackage {
                 }
             )
         } catch (t: Throwable) {
-            xlog("NothingXpert: shuffle PIN hook failed: $t")
+            XposedBridge.log("NothingXpert: shuffle PIN hook failed: $t")
         }
 
         // Install status bar double-tap-to-sleep hook only if enabled
@@ -494,7 +471,7 @@ class HookEntry : IXposedHookLoadPackage {
                     }
                 )
             } catch (t: Throwable) {
-                xlog("NothingXpert: KeyguardTouchViewBinder listener hook failed: $t")
+                XposedBridge.log("NothingXpert: KeyguardTouchViewBinder listener hook failed: $t")
             }
         }
 
@@ -516,7 +493,7 @@ class HookEntry : IXposedHookLoadPackage {
                         val y = param.args.getOrNull(2) as? Int ?: 0
                         val uptime = SystemClock.uptimeMillis()
                         Log.i(LOG_TAG, "onSingleTapDetected hook fired, sleeping")
-                        xlog("NothingXpert: onSingleTapDetected hook fired, sleeping")
+                        XposedBridge.log("NothingXpert: onSingleTapDetected hook fired, sleeping")
                         setTapPosition(x, y)
                         if (tryGoToSleep(pm, uptime)) {
                             blockTouchesUntil = SystemClock.uptimeMillis() + TOUCH_BLOCK_MS
@@ -526,7 +503,7 @@ class HookEntry : IXposedHookLoadPackage {
                 }
             )
         } catch (t: Throwable) {
-            xlog("NothingXpert: KeyguardTouchViewBinder single-tap hook failed: $t")
+            XposedBridge.log("NothingXpert: KeyguardTouchViewBinder single-tap hook failed: $t")
         }
 
         try {
@@ -550,7 +527,7 @@ class HookEntry : IXposedHookLoadPackage {
                 }
             )
         } catch (t: Throwable) {
-            xlog("NothingXpert: TouchHandlingViewInteractionHandler hook failed: $t")
+            XposedBridge.log("NothingXpert: TouchHandlingViewInteractionHandler hook failed: $t")
         }
         if (isSingleTapEnabled()) {
             try {
@@ -581,7 +558,7 @@ class HookEntry : IXposedHookLoadPackage {
                     }
                 )
             } catch (t: Throwable) {
-                xlog("NothingXpert: dispatchSingleTap hook failed: $t")
+                XposedBridge.log("NothingXpert: dispatchSingleTap hook failed: $t")
             }
         }
 
@@ -601,14 +578,14 @@ class HookEntry : IXposedHookLoadPackage {
                         val now = SystemClock.uptimeMillis()
                         if (now < blockTouchesUntil && sensorType in DOZE_BLOCKED_SENSORS) {
                             Log.i(LOG_TAG, "Blocking doze sensor $sensorType during blackout")
-                            xlog("NothingXpert: Blocking doze sensor $sensorType during blackout")
+                            XposedBridge.log("NothingXpert: Blocking doze sensor $sensorType during blackout")
                             param.result = null
                         }
                     }
                 }
             )
         } catch (t: Throwable) {
-            xlog("NothingXpert: DozeTriggers onSensor hook failed: $t")
+            XposedBridge.log("NothingXpert: DozeTriggers onSensor hook failed: $t")
         }
 
         try {
@@ -633,7 +610,7 @@ class HookEntry : IXposedHookLoadPackage {
                 )
             }
         } catch (t: Throwable) {
-            xlog("NothingXpert: keyguard volume fallback failed: $t")
+            XposedBridge.log("NothingXpert: keyguard volume fallback failed: $t")
         }
 
         try {
@@ -653,7 +630,7 @@ class HookEntry : IXposedHookLoadPackage {
                 }
             )
         } catch (t: Throwable) {
-            xlog("NothingXpert: scheduleLongPress hook failed: $t")
+            XposedBridge.log("NothingXpert: scheduleLongPress hook failed: $t")
         }
 
         if (ENABLE_DOUBLE_TAP) {
@@ -688,13 +665,13 @@ class HookEntry : IXposedHookLoadPackage {
                                 }
                             } catch (t: Throwable) {
                                 Log.e(LOG_TAG, "NTTapHandle hook failed", t)
-                                xlog("NothingXpert: NTTapHandle hook failed: $t")
+                                XposedBridge.log("NothingXpert: NTTapHandle hook failed: $t")
                             }
                         }
                     }
                 )
             } catch (t: Throwable) {
-                xlog("NothingXpert: NTTapHandle hook setup failed: $t")
+                XposedBridge.log("NothingXpert: NTTapHandle hook setup failed: $t")
             }
         }
 
@@ -715,7 +692,7 @@ class HookEntry : IXposedHookLoadPackage {
                 }
             )
         } catch (t: Throwable) {
-            xlog("NothingXpert: TouchHandlingViewInteractionHandler onTouchEvent hook failed: $t")
+            XposedBridge.log("NothingXpert: TouchHandlingViewInteractionHandler onTouchEvent hook failed: $t")
         }
 
     }
@@ -729,7 +706,7 @@ class HookEntry : IXposedHookLoadPackage {
                 XposedHelpers.callMethod(systemClock, "uptimeMillis") as? Long
             if (powerManager != null && uptime != null) {
                 Log.i(LOG_TAG, "double-tap detected, sleeping (pm field)")
-                xlog("NothingXpert: double-tap detected, sleeping (pm field)")
+                XposedBridge.log("NothingXpert: double-tap detected, sleeping (pm field)")
                 if (tryGoToSleep(powerManager, uptime)) return true
             }
 
@@ -739,13 +716,13 @@ class HookEntry : IXposedHookLoadPackage {
                 XposedHelpers.callMethod(context, "getSystemService", "power") as? PowerManager
             if (pm != null && uptime != null) {
                 Log.i(LOG_TAG, "double-tap detected, sleeping (pm service)")
-                xlog("NothingXpert: double-tap detected, sleeping (pm service)")
+                XposedBridge.log("NothingXpert: double-tap detected, sleeping (pm service)")
                 if (tryGoToSleep(pm, uptime)) return true
             }
             false
         } catch (t: Throwable) {
             Log.e(LOG_TAG, "double-tap sleep failed", t)
-            xlog("NothingXpert: double-tap sleep failed: $t")
+            XposedBridge.log("NothingXpert: double-tap sleep failed: $t")
             false
         }
     }
@@ -777,7 +754,7 @@ class HookEntry : IXposedHookLoadPackage {
                     true
                 } catch (t: Throwable) {
                     Log.e(LOG_TAG, "goToSleep invocation failed", t)
-                    xlog("NothingXpert: goToSleep invocation failed: $t")
+                    XposedBridge.log("NothingXpert: goToSleep invocation failed: $t")
                     false
                 }
             }
@@ -795,12 +772,12 @@ class HookEntry : IXposedHookLoadPackage {
             val central = XposedHelpers.callStaticMethod(depClass, "get", centralClass)
             if (central != null) {
                 XposedHelpers.callMethod(central, "setTapPos", x, y)
-                xlog("NothingXpert: setTapPos to ($x,$y)")
+                XposedBridge.log("NothingXpert: setTapPos to ($x,$y)")
             } else {
-                xlog("NothingXpert: setTapPos central is null")
+                XposedBridge.log("NothingXpert: setTapPos central is null")
             }
         } catch (t: Throwable) {
-            xlog("NothingXpert: setTapPosition failed: $t")
+            XposedBridge.log("NothingXpert: setTapPosition failed: $t")
         }
     }
 
@@ -930,7 +907,7 @@ class HookEntry : IXposedHookLoadPackage {
                         val ctx = XposedHelpers.getObjectField(pwm, "mContext") as? Context
                         runnableContext = ctx
                         if (handleVolumeForTracks(event, pm, ctx)) {
-                            xlog("NothingXpert: interceptBeforeQueueing consumed")
+                            XposedBridge.log("NothingXpert: interceptBeforeQueueing consumed")
                             param.result = 0 // drop event from queue
                         }
                     }
@@ -938,7 +915,7 @@ class HookEntry : IXposedHookLoadPackage {
             )
             policyVolumeInstalled = true
         } catch (t: Throwable) {
-            xlog("NothingXpert: interceptKeyBeforeQueueing hook failed: $t")
+            XposedBridge.log("NothingXpert: interceptKeyBeforeQueueing hook failed: $t")
         }
 
         // Dispatch-stage hook: try window-state signature first, then fallback to (KeyEvent,int)
@@ -960,7 +937,7 @@ class HookEntry : IXposedHookLoadPackage {
                         val ctx = XposedHelpers.getObjectField(pwm, "mContext") as? Context
                         runnableContext = ctx
                         if (handleVolumeForTracks(event, pm, ctx)) {
-                            xlog("NothingXpert: interceptBeforeDispatch consumed (WS)")
+                            XposedBridge.log("NothingXpert: interceptBeforeDispatch consumed (WS)")
                             param.result = 0L
                         }
                     }
@@ -968,7 +945,7 @@ class HookEntry : IXposedHookLoadPackage {
             )
             dispatchHooked = true
         } catch (t: Throwable) {
-            xlog("NothingXpert: interceptKeyBeforeDispatching WS signature failed: $t")
+            XposedBridge.log("NothingXpert: interceptKeyBeforeDispatching WS signature failed: $t")
         }
 
         if (!dispatchHooked) {
@@ -987,7 +964,7 @@ class HookEntry : IXposedHookLoadPackage {
                             val ctx = XposedHelpers.getObjectField(pwm, "mContext") as? Context
                             runnableContext = ctx
                             if (handleVolumeForTracks(event, pm, ctx)) {
-                                xlog("NothingXpert: interceptBeforeDispatch consumed (fallback)")
+                                XposedBridge.log("NothingXpert: interceptBeforeDispatch consumed (fallback)")
                                 param.result = 0L
                             }
                         }
@@ -995,7 +972,7 @@ class HookEntry : IXposedHookLoadPackage {
                 )
                 dispatchHooked = true
             } catch (t: Throwable) {
-                xlog("NothingXpert: interceptKeyBeforeDispatching fallback failed: $t")
+                XposedBridge.log("NothingXpert: interceptKeyBeforeDispatching fallback failed: $t")
             }
         }
 
@@ -1035,7 +1012,7 @@ class HookEntry : IXposedHookLoadPackage {
     private fun stripSecure(lp: WindowManager.LayoutParams) {
         if (lp.flags and WindowManager.LayoutParams.FLAG_SECURE != 0) {
             lp.flags = lp.flags and WindowManager.LayoutParams.FLAG_SECURE.inv()
-            xlog("NothingXpert: cleared FLAG_SECURE on ${lp.packageName}")
+            XposedBridge.log("NothingXpert: cleared FLAG_SECURE on ${lp.packageName}")
         }
         // Some apps use private flags; attempt to clear the same bit if present.
         try {
@@ -1045,7 +1022,7 @@ class HookEntry : IXposedHookLoadPackage {
             val secureBit = WindowManager.LayoutParams.FLAG_SECURE
             if (current and secureBit != 0) {
                 field.setInt(lp, current and secureBit.inv())
-                xlog("NothingXpert: cleared private FLAG_SECURE on ${lp.packageName}")
+                XposedBridge.log("NothingXpert: cleared private FLAG_SECURE on ${lp.packageName}")
             }
         } catch (_: Throwable) {
         }
@@ -1071,7 +1048,7 @@ class HookEntry : IXposedHookLoadPackage {
                         val activity = param.args[0] as Activity
                         if (isAppLocked(activity.packageName)) {
                             Log.i(LOG_TAG, "Locked app launched: ${activity.packageName}")
-                            xlog("NothingXpert: Locked app launched: ${activity.packageName}")
+                            XposedBridge.log("NothingXpert: Locked app launched: ${activity.packageName}")
                             // We can't block onCreate easily without crashing, but we can overlay immediately
                         }
                     }
@@ -1086,7 +1063,7 @@ class HookEntry : IXposedHookLoadPackage {
                 }
             )
         } catch (t: Throwable) {
-            xlog("NothingXpert: App Lock hook failed: $t")
+            XposedBridge.log("NothingXpert: App Lock hook failed: $t")
         }
     }
 
@@ -1162,7 +1139,7 @@ class HookEntry : IXposedHookLoadPackage {
         try {
             activity.startActivity(intent)
         } catch (e: Exception) {
-            xlog("NothingXpert: Failed to launch lock screen: $e")
+            XposedBridge.log("NothingXpert: Failed to launch lock screen: $e")
         }
     }
 
@@ -1202,17 +1179,9 @@ class HookEntry : IXposedHookLoadPackage {
         return getPreferenceBoolean(PREF_DOUBLE_TAP_WAKE, false)
     }
 
-    private fun isDebugLogsEnabled(): Boolean {
-        debugLogsOverride?.let { return it }
-        return getPreferenceBoolean(PREF_DEBUG_LOGS, false)
-    }
-
     private fun xlog(message: String) {
-        if (isDebugLogsEnabled()) {
-            XposedBridge.log(message)
-        }
+        XposedBridge.log(message)
     }
-
     private fun isHideNavbarEnabled(): Boolean {
         return ENABLE_HIDE_NAVBAR
     }
@@ -1258,7 +1227,7 @@ class HookEntry : IXposedHookLoadPackage {
             audio.dispatchMediaKeyEvent(up)
             true
         } catch (t: Throwable) {
-            xlog("NothingXpert: sendMediaCommand failed: $t")
+            XposedBridge.log("NothingXpert: sendMediaCommand failed: $t")
             false
         }
     }
@@ -1277,7 +1246,7 @@ class HookEntry : IXposedHookLoadPackage {
                 else -> false
             }
         } catch (t: Throwable) {
-            xlog("NothingXpert: executeVolumeAction failed: $t")
+            XposedBridge.log("NothingXpert: executeVolumeAction failed: $t")
             false
         }
     }
@@ -1286,7 +1255,7 @@ class HookEntry : IXposedHookLoadPackage {
         try {
             val cameraManager = context?.getSystemService(Context.CAMERA_SERVICE) as? android.hardware.camera2.CameraManager
             if (cameraManager == null) {
-                xlog("NothingXpert: CameraManager is null")
+                XposedBridge.log("NothingXpert: CameraManager is null")
                 return
             }
             val cameraId = cameraManager.cameraIdList.firstOrNull { id ->
@@ -1294,16 +1263,16 @@ class HookEntry : IXposedHookLoadPackage {
                 characteristics.get(android.hardware.camera2.CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
             }
             if (cameraId == null) {
-                xlog("NothingXpert: No camera with flash found")
+                XposedBridge.log("NothingXpert: No camera with flash found")
                 return
             }
             // Toggle state - we need to track current state
             val isOn = flashlightOn
             cameraManager.setTorchMode(cameraId, !isOn)
             flashlightOn = !isOn
-            xlog("NothingXpert: Flashlight toggled to ${!isOn}")
+            XposedBridge.log("NothingXpert: Flashlight toggled to ${!isOn}")
         } catch (t: Throwable) {
-            xlog("NothingXpert: toggleFlashlight failed: $t")
+            XposedBridge.log("NothingXpert: toggleFlashlight failed: $t")
         }
     }
 
@@ -1325,9 +1294,9 @@ class HookEntry : IXposedHookLoadPackage {
                 } catch (_: Throwable) {
                 }
             }
-            xlog("NothingXpert: shuffled PIN layout")
+            XposedBridge.log("NothingXpert: shuffled PIN layout")
         } catch (t: Throwable) {
-            xlog("NothingXpert: shuffle PIN failed: $t")
+            XposedBridge.log("NothingXpert: shuffle PIN failed: $t")
         }
     }
 
@@ -1350,7 +1319,7 @@ class HookEntry : IXposedHookLoadPackage {
 
         val eventAction = event.action
         val repeat = event.repeatCount
-        xlog("NothingXpert: vol evt code=$code action=$eventAction repeat=$repeat screenOff=$screenOff configuredAction=$configuredAction")
+        XposedBridge.log("NothingXpert: vol evt code=$code action=$eventAction repeat=$repeat screenOff=$screenOff configuredAction=$configuredAction")
 
         when (event.action) {
             KeyEvent.ACTION_DOWN -> {
@@ -1376,7 +1345,7 @@ class HookEntry : IXposedHookLoadPackage {
                     handler.removeCallbacks(skipDownRunnable)
                     skipDownSent = false
                 }
-                xlog("NothingXpert: vol up reset code=$code")
+                XposedBridge.log("NothingXpert: vol up reset code=$code")
                 return true
             }
         }
@@ -1411,9 +1380,6 @@ class HookEntry : IXposedHookLoadPackage {
         const val PREF_SHAKE_TORCH = "pref_shake_torch"
         const val PREF_HIDE_IME_BAR = "pref_hide_ime_bar"
         const val PREF_DOUBLE_TAP_WAKE = "pref_double_tap_wake"
-        const val PREF_DEBUG_LOGS = "pref_debug_logs"
-        const val ACTION_DEBUG_LOGS_TOGGLED = "com.nothingxpert.action.DEBUG_LOGS_TOGGLED"
-        const val EXTRA_DEBUG_LOGS_ENABLED = "enabled"
         const val ACTION_IME_BAR_TOGGLED = "com.nothingxpert.action.IME_BAR_TOGGLED"
         const val EXTRA_IME_BAR_ENABLED = "enabled"
         const val GBOARD_PKG = "com.google.android.inputmethod.latin"
@@ -1429,8 +1395,6 @@ class HookEntry : IXposedHookLoadPackage {
         private val prefCache = HashMap<String, Pair<Long, Boolean>>()
         private val imeDumpOnce = AtomicBoolean(false)
         @Volatile private var imeReceiverRegistered = false
-        @Volatile private var debugReceiverRegistered = false
-        @Volatile private var debugLogsOverride: Boolean? = null
         
         // Volume action constants (matching PixelXpert)
         const val ACTION_NONE = -1
@@ -1516,12 +1480,12 @@ class HookEntry : IXposedHookLoadPackage {
                         lpparam.classLoader
                     )
                 } catch (e2: Throwable) {
-                    xlog("NothingXpert: Could not find status bar view class: $e")
+                    XposedBridge.log("NothingXpert: Could not find status bar view class: $e")
                     return
                 }
             }
 
-            xlog("NothingXpert: Hooking status bar view: ${statusBarViewClass.name}")
+            XposedBridge.log("NothingXpert: Hooking status bar view: ${statusBarViewClass.name}")
 
             XposedHelpers.findAndHookMethod(
                 statusBarViewClass,
@@ -1537,7 +1501,7 @@ class HookEntry : IXposedHookLoadPackage {
                             object : android.view.GestureDetector.SimpleOnGestureListener() {
                                 override fun onDoubleTap(e: android.view.MotionEvent): Boolean {
                                     if (isStatusBarDoubleTapEnabled()) {
-                                        xlog("NothingXpert: Double tap detected on status bar")
+                                        XposedBridge.log("NothingXpert: Double tap detected on status bar")
                                         
                                         // Get tap position for fade animation
                                         val x = e.x.toInt()
@@ -1563,12 +1527,12 @@ class HookEntry : IXposedHookLoadPackage {
                             false  // Don't consume the event, let it propagate
                         }
 
-                        xlog("NothingXpert: Status bar double-tap hook installed")
+                        XposedBridge.log("NothingXpert: Status bar double-tap hook installed")
                     }
                 }
             )
         } catch (t: Throwable) {
-            xlog("NothingXpert: Error installing status bar double-tap hook: $t")
+            XposedBridge.log("NothingXpert: Error installing status bar double-tap hook: $t")
         }
     }
 
@@ -1602,9 +1566,9 @@ class HookEntry : IXposedHookLoadPackage {
                     }
                 }
             )
-            xlog("NothingXpert: IME bar hider installed")
+            XposedBridge.log("NothingXpert: IME bar hider installed")
         } catch (t: Throwable) {
-            xlog("NothingXpert: Failed to install IME bar hider: $t")
+            XposedBridge.log("NothingXpert: Failed to install IME bar hider: $t")
         }
     }
 
@@ -1627,7 +1591,7 @@ class HookEntry : IXposedHookLoadPackage {
                 hiddenAny = true
             }
             if (hiddenAny) {
-                xlog("NothingXpert: IME nav bar hidden")
+                XposedBridge.log("NothingXpert: IME nav bar hidden")
             }
             zeroBottomPaddingUp(decor, 6)
             adjustImeInputViewPadding(decor)
@@ -1640,7 +1604,7 @@ class HookEntry : IXposedHookLoadPackage {
             }
             decor.requestLayout()
         } catch (t: Throwable) {
-            xlog("NothingXpert: Failed to hide IME nav bar: $t")
+            XposedBridge.log("NothingXpert: Failed to hide IME nav bar: $t")
         }
     }
 
@@ -1671,9 +1635,9 @@ class HookEntry : IXposedHookLoadPackage {
                 root.setPadding(root.paddingLeft, root.paddingTop, root.paddingRight, 0)
             }
             root.requestApplyInsets()
-            xlog("NothingXpert: IME insets override installed")
+            XposedBridge.log("NothingXpert: IME insets override installed")
         } catch (t: Throwable) {
-            xlog("NothingXpert: Failed to install IME insets override: $t")
+            XposedBridge.log("NothingXpert: Failed to install IME insets override: $t")
         }
     }
 
@@ -1733,7 +1697,7 @@ class HookEntry : IXposedHookLoadPackage {
             )
 
         } catch (t: Throwable) {
-            xlog("NothingXpert: Failed to install hide navbar hook: $t")
+            XposedBridge.log("NothingXpert: Failed to install hide navbar hook: $t")
         }
     }
 
@@ -1918,7 +1882,7 @@ class HookEntry : IXposedHookLoadPackage {
             }
             if (changed) {
                 (handle.parent as? ViewGroup)?.requestLayout()
-                xlog("NothingXpert: Hiding home_handle from $source")
+                XposedBridge.log("NothingXpert: Hiding home_handle from $source")
             }
         }
     }
@@ -2050,7 +2014,7 @@ class HookEntry : IXposedHookLoadPackage {
             val heightMatches = v.height == navBarHeight || lp?.height == navBarHeight
             val paddingBottom = v.paddingBottom
             if (nearBottom && (heightMatches || bottomMargin > 0 || paddingBottom > 0)) {
-                xlog(
+                XposedBridge.log(
                     "NothingXpert: IME bottom view " +
                         "name=$name class=${v.javaClass.name} " +
                         "h=${v.height} lpH=${lp?.height} bottom=${v.bottom} " +
@@ -2060,7 +2024,7 @@ class HookEntry : IXposedHookLoadPackage {
             }
         }
         visit(root)
-        xlog("NothingXpert: IME bottom view dump done (count=$logs)")
+        XposedBridge.log("NothingXpert: IME bottom view dump done (count=$logs)")
     }
 
     private fun getNavBarHeight(view: View): Int? {

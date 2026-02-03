@@ -53,8 +53,6 @@
     <string name="option_amoled_summary">Use pitch black background</string>
     <string name="option_boot_title">Launch on boot</string>
     <string name="option_boot_summary">Open NothingXpert automatically after the phone boots</string>
-    <string name="option_debug_logs_title">Debug logs</string>
-    <string name="option_debug_logs_summary">Enable LSPosed log output for troubleshooting</string>
     
     <!-- Status Bar -->
     <string name="pref_category_status_bar">Status Bar</string>
