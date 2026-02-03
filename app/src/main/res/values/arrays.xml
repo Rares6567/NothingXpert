@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- LSPosed module scope -->
+    <string-array name="module_scope">
+        <item>android</item>
+        <item>com.android.systemui</item>
+        <item>com.google.android.inputmethod.latin</item>
+    </string-array>
+
     <!-- Volume long-press action entries (display names) -->
     <string-array name="volume_action_entries">
         <item>Default (volume change)</item>
