@@ -465,12 +465,9 @@ class MainActivity : AppCompatActivity() {
         // Setup AMOLED switch
         val switchAmoled = findViewById<com.google.android.material.materialswitch.MaterialSwitch>(R.id.switch_amoled)
         val cardAmoled = findViewById<View>(R.id.card_amoled)
-        val switchBoot = findViewById<com.google.android.material.materialswitch.MaterialSwitch>(R.id.switch_boot)
-        val cardBoot = findViewById<View>(R.id.card_boot)
         
         val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
         switchAmoled.isChecked = prefs.getBoolean("pref_amoled_theme", false)
-        switchBoot.isChecked = prefs.getBoolean("pref_launch_on_boot", false)
         
         val toggleListener = { _: View ->
             val newState = !switchAmoled.isChecked
@@ -480,25 +477,11 @@ class MainActivity : AppCompatActivity() {
             scheduleRestartSelf()
         }
         
-        // Toggle on card click
         cardAmoled.setOnClickListener(toggleListener)
-        // Toggle on switch click (override default to handle recreation)
         switchAmoled.setOnClickListener { 
             prefs.edit().putBoolean("pref_amoled_theme", switchAmoled.isChecked).commit()
             PrefsUtil.ensurePrefsAccessible(this)
             scheduleRestartSelf()
-        }
-
-        val bootToggleListener = { _: View ->
-            val newState = !switchBoot.isChecked
-            switchBoot.isChecked = newState
-            prefs.edit().putBoolean("pref_launch_on_boot", newState).commit()
-            PrefsUtil.ensurePrefsAccessible(this)
-        }
-        cardBoot.setOnClickListener(bootToggleListener)
-        switchBoot.setOnClickListener { 
-            prefs.edit().putBoolean("pref_launch_on_boot", switchBoot.isChecked).commit()
-            PrefsUtil.ensurePrefsAccessible(this)
         }
     }
 

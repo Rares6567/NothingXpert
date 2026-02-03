@@ -51,8 +51,6 @@
     <string name="options_menu_subtitle">Quick access to sections</string>
     <string name="option_amoled_title">AMOLED Theme</string>
     <string name="option_amoled_summary">Use pitch black background</string>
-    <string name="option_boot_title">Launch on boot</string>
-    <string name="option_boot_summary">Open NothingXpert automatically after the phone boots</string>
     
     <!-- Status Bar -->
     <string name="pref_category_status_bar">Status Bar</string>

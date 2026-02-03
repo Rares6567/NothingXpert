@@ -3,7 +3,6 @@
 
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <uses-permission android:name="android.permission.USE_FINGERPRINT" />
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!-- Allow listing launcher apps for App Lock picker -->
     <queries>
@@ -78,15 +77,6 @@
             android:taskAffinity="com.nothingxpert.lock"
             android:finishOnTaskLaunch="true" />
 
-        <receiver
-            android:name=".BootReceiver"
-            android:enabled="true"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
-            </intent-filter>
-        </receiver>
         <provider
             android:name=".RemotePrefProvider"
             android:authorities="com.nothingxpert"
