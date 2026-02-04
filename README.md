@@ -23,3 +23,7 @@ A small LSPosed/Xposed module that adds useful features to your Nothing Phone wi
 * Root access
 
 * LSPosed
+
+**Useful links:**
+* Telegram Channel: https://t.me/NothingXpertC
+* Telegram Group: https://t.me/NothingXpert
