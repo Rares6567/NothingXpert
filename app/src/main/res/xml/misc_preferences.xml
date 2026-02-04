@@ -40,6 +40,12 @@
             android:title="@string/pref_double_tap_wake_title"
             app:iconSpaceReserved="false" />
 
+        <com.nothingxpert.ui.preferences.MaterialPreference
+            android:key="pref_undismissable_notifs"
+            android:title="@string/pref_undismissable_notifs_title"
+            android:summary="@string/pref_undismissable_notifs_summary"
+            app:iconSpaceReserved="false" />
+
     </com.nothingxpert.ui.preferences.MaterialPreferenceCategory>
 
 	<com.nothingxpert.ui.preferences.MaterialPreferenceCategory

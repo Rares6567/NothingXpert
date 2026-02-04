@@ -454,6 +454,9 @@ class HookEntry : IXposedHookLoadPackage, XPrefs.OnPreferenceUpdateListener {
             installStatusBarDoubleTapHook(lpparam)
         }
 
+        // Install undismissable notifications hook
+        installUndismissableNotificationsHook(lpparam)
+
         if (ENABLE_DOUBLE_TAP) {
             try {
                 // Directly hook the double-tap listener on the lockscreen view.
@@ -1569,6 +1572,8 @@ class HookEntry : IXposedHookLoadPackage, XPrefs.OnPreferenceUpdateListener {
         const val PREF_SHAKE_TORCH = "pref_shake_torch"
         const val PREF_HIDE_IME_BAR = "pref_hide_ime_bar"
         const val PREF_DOUBLE_TAP_WAKE = "pref_double_tap_wake"
+        const val PREF_UNDISMISSABLE_NOTIFS = "pref_undismissable_notifs"
+        const val UNDISMISSABLE_PACKAGES = "undismissable_packages"
         const val ACTION_IME_BAR_TOGGLED = "com.nothingxpert.action.IME_BAR_TOGGLED"
         const val EXTRA_IME_BAR_ENABLED = "enabled"
         const val GBOARD_PKG = "com.google.android.inputmethod.latin"
@@ -1583,6 +1588,7 @@ class HookEntry : IXposedHookLoadPackage, XPrefs.OnPreferenceUpdateListener {
         private const val PREF_CACHE_MS = 5_000L
         private val prefCache = HashMap<String, Pair<Long, Boolean>>()
         private val stringPrefCache = HashMap<String, Pair<Long, String>>()
+        private val stringSetPrefCache = HashMap<String, Pair<Long, Set<String>>>()
         private val imeDumpOnce = AtomicBoolean(false)
         @Volatile private var imeReceiverRegistered = false
         
@@ -2304,5 +2310,102 @@ class HookEntry : IXposedHookLoadPackage, XPrefs.OnPreferenceUpdateListener {
             prefCache[key] = now to defValue
         }
         return defValue
+    }
+
+    private fun getUndismissablePackages(): Set<String> {
+        val now = SystemClock.uptimeMillis()
+
+        synchronized(stringSetPrefCache) {
+            stringSetPrefCache[UNDISMISSABLE_PACKAGES]?.let { (ts, v) ->
+                if (now - ts < PREF_CACHE_MS) return v
+            }
+        }
+
+        val result = mutableSetOf<String>()
+
+        if (useRemotePrefs) {
+            try {
+                val prefs = XPrefs.prefs
+                val raw = prefs?.getStringSet(UNDISMISSABLE_PACKAGES, emptySet()) ?: emptySet()
+                result.addAll(raw)
+            } catch (_: Throwable) {}
+        }
+
+        if (result.isEmpty()) {
+            try {
+                val deFile = java.io.File("/data/user_de/0/$MODULE_PKG/shared_prefs/${MODULE_PKG}_preferences.xml")
+                if (deFile.exists() && deFile.canRead()) {
+                    val xsp = XSharedPreferences(deFile)
+                    xsp.makeWorldReadable()
+                    if (xsp.hasFileChanged()) xsp.reload()
+                    val raw = xsp.getStringSet(UNDISMISSABLE_PACKAGES, emptySet()) ?: emptySet()
+                    result.addAll(raw)
+                }
+            } catch (_: Throwable) {}
+
+            if (result.isEmpty()) {
+                try {
+                    val ceFile = java.io.File("/data/data/$MODULE_PKG/shared_prefs/${MODULE_PKG}_preferences.xml")
+                    if (ceFile.exists() && ceFile.canRead()) {
+                        val xsp = XSharedPreferences(ceFile)
+                        xsp.makeWorldReadable()
+                        if (xsp.hasFileChanged()) xsp.reload()
+                        val raw = xsp.getStringSet(UNDISMISSABLE_PACKAGES, emptySet()) ?: emptySet()
+                        result.addAll(raw)
+                    }
+                } catch (_: Throwable) {}
+            }
+
+            if (result.isEmpty()) {
+                try {
+                    val prefs = XSharedPreferences(MODULE_PKG, "${MODULE_PKG}_preferences")
+                    prefs.makeWorldReadable()
+                    if (prefs.hasFileChanged()) prefs.reload()
+                    val raw = prefs.getStringSet(UNDISMISSABLE_PACKAGES, emptySet()) ?: emptySet()
+                    result.addAll(raw)
+                } catch (_: Throwable) {}
+            }
+        }
+
+        synchronized(stringSetPrefCache) {
+            stringSetPrefCache[UNDISMISSABLE_PACKAGES] = now to result
+        }
+        return result
+    }
+
+    private fun installUndismissableNotificationsHook(lpparam: XC_LoadPackage.LoadPackageParam) {
+        try {
+            val statusBarNotificationClass = XposedHelpers.findClass(
+                "android.service.notification.StatusBarNotification",
+                lpparam.classLoader
+            )
+
+            XposedBridge.log("NothingXpert: Installing undismissable notifications hook")
+
+            XposedHelpers.findAndHookMethod(
+                statusBarNotificationClass,
+                "isNonDismissable",
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        val undismissablePkgs = getUndismissablePackages()
+                        if (undismissablePkgs.isEmpty()) return
+
+                        try {
+                            val sbn = param.thisObject
+                            val pkg = XposedHelpers.callMethod(sbn, "getPackageName") as? String ?: return
+                            
+                            if (undismissablePkgs.contains(pkg)) {
+                                param.result = true
+                            }
+                        } catch (t: Throwable) {
+                            XposedBridge.log("NothingXpert: Error checking undismissable notification: $t")
+                        }
+                    }
+                }
+            )
+            XposedBridge.log("NothingXpert: Undismissable notifications hook installed")
+        } catch (t: Throwable) {
+            XposedBridge.log("NothingXpert: Failed to install undismissable notifications hook: $t")
+        }
     }
 }

@@ -68,6 +68,11 @@
             android:label="@string/pref_category_apps" />
 
         <activity
+            android:name=".UndismissableNotifsSettingsActivity"
+            android:exported="false"
+            android:label="@string/pref_undismissable_notifs_title" />
+
+        <activity
             android:name=".LockScreenActivity"
             android:exported="true"
             android:theme="@style/Theme.AppCompat.NoActionBar"

@@ -58,6 +58,13 @@
     <string name="pref_category_gestures">Gestures</string>
     <string name="pref_status_bar_double_tap_title">Double tap to sleep</string>
     <string name="pref_status_bar_double_tap_summary">Turn screen off by double tapping the status bar</string>
-    
+
     <string name="app_lock_button">App Lock</string>
+
+    <!-- Undismissable Notifications -->
+    <string name="pref_undismissable_notifs_title">Undismissable Notifications</string>
+    <string name="pref_undismissable_notifs_summary">Select apps whose notifications cannot be dismissed</string>
+    <string name="pref_undismissable_notifs_picker_summary">Choose apps that should show notifications that cannot be swiped away</string>
+    <string name="undismissable_notifs_filter_all">Showing all apps</string>
+    <string name="undismissable_notifs_filter_selected">Showing selected apps only</string>
 </resources>

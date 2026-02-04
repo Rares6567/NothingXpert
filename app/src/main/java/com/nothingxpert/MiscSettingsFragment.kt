@@ -1,8 +1,10 @@
 package com.nothingxpert
 
 import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import android.util.Log
+import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
 
 class MiscSettingsFragment : PreferenceFragmentCompat() {
@@ -65,5 +67,13 @@ class MiscSettingsFragment : PreferenceFragmentCompat() {
     override fun onPause() {
         super.onPause()
         preferenceManager.sharedPreferences?.unregisterOnSharedPreferenceChangeListener(prefListener)
+    }
+
+    override fun onPreferenceTreeClick(preference: Preference): Boolean {
+        if (preference.key == HookEntry.PREF_UNDISMISSABLE_NOTIFS) {
+            startActivity(Intent(requireContext(), UndismissableNotifsSettingsActivity::class.java))
+            return true
+        }
+        return super.onPreferenceTreeClick(preference)
     }
 }
