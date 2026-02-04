@@ -88,7 +88,7 @@ class HookEntry : IXposedHookLoadPackage, XPrefs.OnPreferenceUpdateListener {
             sensorManager.registerListener(
                 listener,
                 accel,
-                android.hardware.SensorManager.SENSOR_DELAY_GAME
+                android.hardware.SensorManager.SENSOR_DELAY_NORMAL
             )
             if (prox != null) {
                 sensorManager.registerListener(
