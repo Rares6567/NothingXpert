@@ -1102,42 +1102,18 @@ class HookEntry : IXposedHookLoadPackage, XPrefs.OnPreferenceUpdateListener {
     }
 
     private fun isAppLocked(packageName: String): Boolean {
-        // Try device-encrypted storage first
-        try {
-            val deFile = java.io.File("/data/user_de/0/$MODULE_PKG/shared_prefs/${MODULE_PKG}_preferences.xml")
-            if (deFile.exists() && deFile.canRead()) {
-                val xsp = XSharedPreferences(deFile)
-                xsp.makeWorldReadable()
-                if (xsp.hasFileChanged()) xsp.reload()
-                val lockedSet = xsp.getStringSet("pref_locked_packages", emptySet())
+        if (useRemotePrefs) {
+            try {
+                val lockedSet = XPrefs.prefs?.getStringSet("pref_locked_packages", emptySet())
                 if (lockedSet?.contains(packageName) == true) return true
-            }
-        } catch (_: Throwable) {
+            } catch (_: Throwable) {}
         }
-
-        // Try credential-encrypted storage
-        try {
-            val ceFile = java.io.File("/data/data/$MODULE_PKG/shared_prefs/${MODULE_PKG}_preferences.xml")
-            if (ceFile.exists() && ceFile.canRead()) {
-                val xsp = XSharedPreferences(ceFile)
-                xsp.makeWorldReadable()
-                if (xsp.hasFileChanged()) xsp.reload()
-                val lockedSet = xsp.getStringSet("pref_locked_packages", emptySet())
-                if (lockedSet?.contains(packageName) == true) return true
-            }
-        } catch (_: Throwable) {
-        }
-
-        // Fallback to standard XSharedPreferences
-        try {
-            val xsp = XSharedPreferences(MODULE_PKG, "${MODULE_PKG}_preferences")
-            xsp.makeWorldReadable()
-            if (xsp.hasFileChanged()) xsp.reload()
+        
+        return try {
+            val xsp = getXsp() ?: return false
             val lockedSet = xsp.getStringSet("pref_locked_packages", emptySet())
-            return lockedSet?.contains(packageName) == true
-        } catch (_: Throwable) {
-            return false
-        }
+            lockedSet?.contains(packageName) == true
+        } catch (_: Throwable) { false }
     }
 
 
@@ -1299,65 +1275,18 @@ class HookEntry : IXposedHookLoadPackage, XPrefs.OnPreferenceUpdateListener {
             }
         }
 
-        if (useRemotePrefs) {
-            try {
-                val v = XPrefs.getString(key, defValue)
-                synchronized(stringPrefCache) {
-                    stringPrefCache[key] = now to v
-                }
-                return v
-            } catch (_: Throwable) {}
-        }
-
-        try {
-            val deFile = java.io.File("/data/user_de/0/$MODULE_PKG/shared_prefs/${MODULE_PKG}_preferences.xml")
-            if (deFile.exists() && deFile.canRead()) {
-                val xsp = XSharedPreferences(deFile)
-                xsp.makeWorldReadable()
-                if (xsp.hasFileChanged()) xsp.reload()
-                val value = xsp.getString(key, null)
-                if (value != null) {
-                    synchronized(stringPrefCache) {
-                        stringPrefCache[key] = now to value
-                    }
-                    return value
-                }
-            }
-        } catch (_: Throwable) {}
-
-        try {
-            val ceFile = java.io.File("/data/data/$MODULE_PKG/shared_prefs/${MODULE_PKG}_preferences.xml")
-            if (ceFile.exists() && ceFile.canRead()) {
-                val xsp = XSharedPreferences(ceFile)
-                xsp.makeWorldReadable()
-                if (xsp.hasFileChanged()) xsp.reload()
-                val value = xsp.getString(key, null)
-                if (value != null) {
-                    synchronized(stringPrefCache) {
-                        stringPrefCache[key] = now to value
-                    }
-                    return value
-                }
-            }
-        } catch (_: Throwable) {}
-
-        try {
-            val xsp = XSharedPreferences(MODULE_PKG, "${MODULE_PKG}_preferences")
-            xsp.makeWorldReadable()
-            if (xsp.hasFileChanged()) xsp.reload()
-            val value = xsp.getString(key, null)
-            if (value != null) {
-                synchronized(stringPrefCache) {
-                    stringPrefCache[key] = now to value
-                }
-                return value
-            }
-        } catch (_: Throwable) {}
+        val result = if (useRemotePrefs) {
+            try { XPrefs.getString(key, defValue) } catch (_: Throwable) { null }
+        } else null
+        
+        val value = result ?: try {
+            getXsp()?.getString(key, null)
+        } catch (_: Throwable) { null } ?: defValue
 
         synchronized(stringPrefCache) {
-            stringPrefCache[key] = now to defValue
+            stringPrefCache[key] = now to value
         }
-        return defValue
+        return value
     }
 
     private fun sendMediaCommand(keyCode: Int, context: Context?): Boolean {
@@ -1586,9 +1515,48 @@ class HookEntry : IXposedHookLoadPackage, XPrefs.OnPreferenceUpdateListener {
         const val DOUBLE_TAP_WAKE_ARM_DELAY_MS = 900L
         const val DOUBLE_TAP_WAKE_SLOP_PX = 120
         private const val PREF_CACHE_MS = 5_000L
+        private const val XSP_CACHE_MS = 10_000L
         private val prefCache = HashMap<String, Pair<Long, Boolean>>()
         private val stringPrefCache = HashMap<String, Pair<Long, String>>()
         private val stringSetPrefCache = HashMap<String, Pair<Long, Set<String>>>()
+        
+        @Volatile private var cachedXsp: XSharedPreferences? = null
+        @Volatile private var lastXspCheck: Long = 0L
+        
+        private fun getXsp(): XSharedPreferences? {
+            val now = SystemClock.uptimeMillis()
+            val xsp = cachedXsp
+            if (xsp != null && now - lastXspCheck < XSP_CACHE_MS) {
+                if (xsp.hasFileChanged()) xsp.reload()
+                return xsp
+            }
+            
+            val paths = listOf(
+                "/data/user_de/0/$MODULE_PKG/shared_prefs/${MODULE_PKG}_preferences.xml",
+                "/data/data/$MODULE_PKG/shared_prefs/${MODULE_PKG}_preferences.xml"
+            )
+            
+            for (path in paths) {
+                try {
+                    val file = java.io.File(path)
+                    if (file.exists() && file.canRead()) {
+                        val newXsp = XSharedPreferences(file)
+                        newXsp.makeWorldReadable()
+                        cachedXsp = newXsp
+                        lastXspCheck = now
+                        return newXsp
+                    }
+                } catch (_: Throwable) {}
+            }
+            
+            return try {
+                val newXsp = XSharedPreferences(MODULE_PKG, "${MODULE_PKG}_preferences")
+                newXsp.makeWorldReadable()
+                cachedXsp = newXsp
+                lastXspCheck = now
+                newXsp
+            } catch (_: Throwable) { null }
+        }
         private val imeDumpOnce = AtomicBoolean(false)
         @Volatile private var imeReceiverRegistered = false
         
@@ -2251,65 +2219,19 @@ class HookEntry : IXposedHookLoadPackage, XPrefs.OnPreferenceUpdateListener {
             }
         }
 
-        if (useRemotePrefs) {
-            try {
-                val v = XPrefs.getBoolean(key, defValue)
-                synchronized(prefCache) {
-                    prefCache[key] = now to v
-                }
-                return v
-            } catch (_: Throwable) {}
-        }
-
-        try {
-            val deFile = java.io.File("/data/user_de/0/$MODULE_PKG/shared_prefs/${MODULE_PKG}_preferences.xml")
-            if (deFile.exists() && deFile.canRead()) {
-                val xsp = XSharedPreferences(deFile)
-                xsp.makeWorldReadable()
-                if (xsp.hasFileChanged()) xsp.reload()
-                if (xsp.contains(key)) {
-                    val v = xsp.getBoolean(key, defValue)
-                    synchronized(prefCache) {
-                        prefCache[key] = now to v
-                    }
-                    return v
-                }
-            }
-        } catch (_: Throwable) {}
-
-        try {
-            val ceFile = java.io.File("/data/data/$MODULE_PKG/shared_prefs/${MODULE_PKG}_preferences.xml")
-            if (ceFile.exists() && ceFile.canRead()) {
-                val xsp = XSharedPreferences(ceFile)
-                xsp.makeWorldReadable()
-                if (xsp.hasFileChanged()) xsp.reload()
-                if (xsp.contains(key)) {
-                    val v = xsp.getBoolean(key, defValue)
-                    synchronized(prefCache) {
-                        prefCache[key] = now to v
-                    }
-                    return v
-                }
-            }
-        } catch (_: Throwable) {}
-
-        try {
-            val prefs = XSharedPreferences(MODULE_PKG, "${MODULE_PKG}_preferences")
-            prefs.makeWorldReadable()
-            if (prefs.hasFileChanged()) prefs.reload()
-            if (prefs.contains(key)) {
-                val v = prefs.getBoolean(key, defValue)
-                synchronized(prefCache) {
-                    prefCache[key] = now to v
-                }
-                return v
-            }
-        } catch (_: Throwable) {}
+        val value = if (useRemotePrefs) {
+            try { XPrefs.getBoolean(key, defValue) } catch (_: Throwable) { null }
+        } else null
+        
+        val result = value ?: try {
+            val xsp = getXsp()
+            if (xsp?.contains(key) == true) xsp.getBoolean(key, defValue) else defValue
+        } catch (_: Throwable) { defValue }
 
         synchronized(prefCache) {
-            prefCache[key] = now to defValue
+            prefCache[key] = now to result
         }
-        return defValue
+        return result
     }
 
     private fun getUndismissablePackages(): Set<String> {
@@ -2321,50 +2243,14 @@ class HookEntry : IXposedHookLoadPackage, XPrefs.OnPreferenceUpdateListener {
             }
         }
 
-        val result = mutableSetOf<String>()
-
-        if (useRemotePrefs) {
+        val result = if (useRemotePrefs) {
             try {
-                val prefs = XPrefs.prefs
-                val raw = prefs?.getStringSet(UNDISMISSABLE_PACKAGES, emptySet()) ?: emptySet()
-                result.addAll(raw)
-            } catch (_: Throwable) {}
-        }
-
-        if (result.isEmpty()) {
+                XPrefs.prefs?.getStringSet(UNDISMISSABLE_PACKAGES, emptySet()) ?: emptySet()
+            } catch (_: Throwable) { emptySet() }
+        } else {
             try {
-                val deFile = java.io.File("/data/user_de/0/$MODULE_PKG/shared_prefs/${MODULE_PKG}_preferences.xml")
-                if (deFile.exists() && deFile.canRead()) {
-                    val xsp = XSharedPreferences(deFile)
-                    xsp.makeWorldReadable()
-                    if (xsp.hasFileChanged()) xsp.reload()
-                    val raw = xsp.getStringSet(UNDISMISSABLE_PACKAGES, emptySet()) ?: emptySet()
-                    result.addAll(raw)
-                }
-            } catch (_: Throwable) {}
-
-            if (result.isEmpty()) {
-                try {
-                    val ceFile = java.io.File("/data/data/$MODULE_PKG/shared_prefs/${MODULE_PKG}_preferences.xml")
-                    if (ceFile.exists() && ceFile.canRead()) {
-                        val xsp = XSharedPreferences(ceFile)
-                        xsp.makeWorldReadable()
-                        if (xsp.hasFileChanged()) xsp.reload()
-                        val raw = xsp.getStringSet(UNDISMISSABLE_PACKAGES, emptySet()) ?: emptySet()
-                        result.addAll(raw)
-                    }
-                } catch (_: Throwable) {}
-            }
-
-            if (result.isEmpty()) {
-                try {
-                    val prefs = XSharedPreferences(MODULE_PKG, "${MODULE_PKG}_preferences")
-                    prefs.makeWorldReadable()
-                    if (prefs.hasFileChanged()) prefs.reload()
-                    val raw = prefs.getStringSet(UNDISMISSABLE_PACKAGES, emptySet()) ?: emptySet()
-                    result.addAll(raw)
-                } catch (_: Throwable) {}
-            }
+                getXsp()?.getStringSet(UNDISMISSABLE_PACKAGES, emptySet()) ?: emptySet()
+            } catch (_: Throwable) { emptySet() }
         }
 
         synchronized(stringSetPrefCache) {
