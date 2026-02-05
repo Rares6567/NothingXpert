@@ -52,6 +52,26 @@ class AppsActivity : AppCompatActivity() {
             startActivity(Intent(this, AppLockSettingsActivity::class.java))
             overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
         }
+
+        // Configure Undismissable Notifications row
+        val notifRow = findViewById<android.view.View>(R.id.row_undismissable_notifs)
+        val notifIcon = notifRow.findViewById<android.widget.ImageView>(R.id.category_icon)
+        val notifTitle = notifRow.findViewById<android.widget.TextView>(R.id.category_title)
+        val notifSummary = notifRow.findViewById<android.widget.TextView>(R.id.category_summary)
+
+        notifIcon.setImageResource(R.drawable.ic_settings_apps)
+        val notifBgTint = androidx.core.content.ContextCompat.getColor(this, R.color.main_preference_color_2)
+        val notifIconTint = androidx.core.content.ContextCompat.getColor(this, R.color.main_preference_on_color_2)
+        notifIcon.background.setTint(notifBgTint)
+        notifIcon.imageTintList = android.content.res.ColorStateList.valueOf(notifIconTint)
+
+        notifTitle.text = getString(R.string.pref_undismissable_notifs_title).uppercase()
+        notifSummary.text = getString(R.string.pref_undismissable_notifs_summary)
+
+        notifRow.setOnClickListener {
+            startActivity(Intent(this, UndismissableNotifsSettingsActivity::class.java))
+            overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
+        }
     }
 
     override fun onSupportNavigateUp(): Boolean {
