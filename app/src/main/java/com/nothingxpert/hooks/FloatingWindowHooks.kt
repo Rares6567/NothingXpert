@@ -153,7 +153,9 @@ class FloatingWindowHooks : BaseHook() {
         var initialTouchX = 0f
         var initialTouchY = 0f
         var isDragging = false
+        var lastUpdateTime = 0L
         val clickThreshold = dpToPx(context, 10)
+        val updateThrottleMs = 16L // ~60fps max
         
         container.setOnTouchListener { _, event ->
             when (event.action) {
@@ -163,6 +165,7 @@ class FloatingWindowHooks : BaseHook() {
                     initialTouchX = event.rawX
                     initialTouchY = event.rawY
                     isDragging = false
+                    lastUpdateTime = System.currentTimeMillis()
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
@@ -170,18 +173,34 @@ class FloatingWindowHooks : BaseHook() {
                     val dy = event.rawY - initialTouchY
                     if (kotlin.math.abs(dx) > clickThreshold || kotlin.math.abs(dy) > clickThreshold) {
                         isDragging = true
+                        isDraggingWindow = true // Pause stats updates
                     }
                     if (isDragging) {
+                        val now = System.currentTimeMillis()
+                        // Throttle updates to reduce lag
+                        if (now - lastUpdateTime >= updateThrottleMs) {
+                            layoutParams.x = initialX + dx.toInt()
+                            layoutParams.y = initialY + dy.toInt()
+                            try {
+                                wm.updateViewLayout(container, layoutParams)
+                            } catch (_: Throwable) {}
+                            lastUpdateTime = now
+                        }
+                    }
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    isDraggingWindow = false // Resume stats updates
+                    if (isDragging) {
+                        // Final position update on release
+                        val dx = event.rawX - initialTouchX
+                        val dy = event.rawY - initialTouchY
                         layoutParams.x = initialX + dx.toInt()
                         layoutParams.y = initialY + dy.toInt()
                         try {
                             wm.updateViewLayout(container, layoutParams)
                         } catch (_: Throwable) {}
-                    }
-                    true
-                }
-                MotionEvent.ACTION_UP -> {
-                    if (!isDragging) {
+                    } else {
                         // It was a click - toggle expanded mode
                         toggleExpandedMode()
                     }
@@ -228,7 +247,10 @@ class FloatingWindowHooks : BaseHook() {
                     return
                 }
                 
-                updateStats()
+                // Skip updates while dragging to reduce lag
+                if (!isDraggingWindow) {
+                    updateStats()
+                }
                 handler.postDelayed(this, UPDATE_INTERVAL_MS)
             }
         }
@@ -673,6 +695,7 @@ class FloatingWindowHooks : BaseHook() {
         @Volatile private var detailTextView8: TextView? = null
         
         @Volatile private var isExpanded = false
+        @Volatile private var isDraggingWindow = false
         
         @Volatile private var lastCpuTotal: Long = -1L
         @Volatile private var lastCpuIdle: Long = -1L
