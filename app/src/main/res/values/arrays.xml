@@ -26,4 +26,18 @@
         <item>6</item>
         <item>7</item>
     </string-array>
+
+    <!-- Floating window size entries -->
+    <string-array name="floating_window_size_entries">
+        <item>@string/floating_window_size_small</item>
+        <item>@string/floating_window_size_medium</item>
+        <item>@string/floating_window_size_large</item>
+    </string-array>
+
+    <!-- Floating window size values -->
+    <string-array name="floating_window_size_values">
+        <item>small</item>
+        <item>medium</item>
+        <item>large</item>
+    </string-array>
 </resources>

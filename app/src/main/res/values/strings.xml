@@ -67,4 +67,13 @@
     <string name="pref_undismissable_notifs_picker_summary">Choose apps that should show notifications that cannot be swiped away</string>
     <string name="undismissable_notifs_filter_all">Showing all apps</string>
     <string name="undismissable_notifs_filter_selected">Showing selected apps only</string>
+
+    <!-- Floating Window -->
+    <string name="pref_category_floating_window">Floating Stats</string>
+    <string name="pref_floating_window_title">Floating Stats Overlay</string>
+    <string name="pref_floating_window_summary">Show a draggable overlay with real-time CPU, GPU, RAM usage and temperatures</string>
+    <string name="pref_floating_window_size_title">Text Size</string>
+    <string name="floating_window_size_small">Small</string>
+    <string name="floating_window_size_medium">Medium</string>
+    <string name="floating_window_size_large">Large</string>
 </resources>

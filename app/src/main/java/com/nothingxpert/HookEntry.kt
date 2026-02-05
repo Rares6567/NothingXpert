@@ -23,7 +23,8 @@ class HookEntry : IXposedHookLoadPackage, XPrefs.OnPreferenceUpdateListener {
         NavbarHooks(),
         AppLockHooks(),
         NotificationHooks(),
-        SystemHooks()
+        SystemHooks(),
+        FloatingWindowHooks()
     )
     
     override fun handleLoadPackage(lpparam: XC_LoadPackage.LoadPackageParam) {
@@ -84,6 +85,11 @@ class HookEntry : IXposedHookLoadPackage, XPrefs.OnPreferenceUpdateListener {
     
     override fun onPreferenceUpdated(key: String?) {
         BaseHook.clearCache(key)
+        // Handle floating window preference changes
+        if (key == FloatingWindowHooks.PREF_FLOATING_WINDOW_ENABLED || 
+            key == FloatingWindowHooks.PREF_FLOATING_WINDOW_SIZE) {
+            FloatingWindowHooks.refreshFromPrefs()
+        }
     }
     
     private fun registerImeToggleReceiver() {
