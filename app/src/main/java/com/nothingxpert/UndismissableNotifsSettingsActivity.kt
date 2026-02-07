@@ -32,7 +32,8 @@ class UndismissableNotifsSettingsActivity : AppCompatActivity() {
         }
 
         val toolbar: MaterialToolbar = findViewById(R.id.toolbar)
-        toolbar.setTitle(R.string.pref_undismissable_notifs_title)
+        // Match other sub-screens: toolbar shows category name, content shows feature title.
+        toolbar.setTitle(R.string.pref_category_apps)
         setSupportActionBar(toolbar)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
 
