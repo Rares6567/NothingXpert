@@ -8,6 +8,7 @@ import android.graphics.PixelFormat
 import android.graphics.Typeface
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.text.format.Formatter
 import android.view.Gravity
 import android.view.MotionEvent
@@ -21,6 +22,8 @@ import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
 import com.nothingxpert.XPrefs
 import com.nothingxpert.util.RootShell
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Creates a floating window overlay that shows real-time system stats:
@@ -241,75 +244,123 @@ class FloatingWindowHooks : BaseHook() {
     }
     
     private fun startStatsUpdater() {
-        val updateRunnable = object : Runnable {
-            override fun run() {
-                if (!getPreferenceBoolean(PREF_FLOATING_WINDOW_ENABLED, false)) {
-                    hideFloatingWindow()
-                    return
-                }
-                
-                // Skip updates while dragging to reduce lag
-                if (!isDraggingWindow) {
-                    updateStats()
-                }
-                handler.postDelayed(this, UPDATE_INTERVAL_MS)
+        if (statsUpdaterRunning) return
+        ensureScreenReceiver()
+        statsUpdaterRunning = true
+        handler.post(statsUpdaterRunnable)
+    }
+
+    private val statsUpdaterRunnable = object : Runnable {
+        override fun run() {
+            if (!getPreferenceBoolean(PREF_FLOATING_WINDOW_ENABLED, false)) {
+                statsUpdaterRunning = false
+                hideFloatingWindow()
+                return
+            }
+
+            val ctx = systemUiContext
+            val pm = ctx?.getSystemService(Context.POWER_SERVICE) as? PowerManager
+            val interactive = pm?.isInteractive ?: true
+
+            if (!interactive) {
+                // Screen off/dozing: pause updates. Screen receiver will restart us.
+                statsUpdaterRunning = false
+                return
+            }
+
+            // Skip updates while dragging to reduce lag
+            if (!isDraggingWindow) {
+                scheduleStatsUpdate()
+            }
+
+            val delay = if (isExpanded) UPDATE_INTERVAL_EXPANDED_MS else UPDATE_INTERVAL_COLLAPSED_MS
+            handler.postDelayed(this, delay)
+        }
+    }
+
+    private fun scheduleStatsUpdate() {
+        // Avoid spawning a new Thread each tick; reuse a single worker and drop frames if it lags.
+        if (!statsUpdateInFlight.compareAndSet(false, true)) return
+        statsExecutor.execute {
+            try {
+                performStatsUpdate()
+            } finally {
+                statsUpdateInFlight.set(false)
             }
         }
-        handler.post(updateRunnable)
     }
     
-    private fun updateStats() {
+    private fun performStatsUpdate() {
         val ctx = systemUiContext ?: return
         
-        // Update on background thread, post to UI
-        Thread {
-            // Read via root shell instead of relying on a separate LSPosed CPU reporter.
-            val cpuUsage = readCpuUsageDirect()
-            val cpuTemp = readCpuTemp()
-            
-            val gpuUsage = readGpuUsage()
-            val gpuTemp = readGpuTemp()
-            val ramInfo = readRamInfo(ctx)
-            
-            // Read detailed info if expanded
-            var batteryTemp: Int? = null
-            var batteryLevel: Int? = null
-            var uptime = ""
-            var cpuFreqs = ""
-            var batteryCurrent = ""
-            var batteryVoltage = ""
-            var availRam = ""
-            var swapInfo = ""
+        val now = android.os.SystemClock.elapsedRealtime()
+
+        // Fast path: usage values.
+        val cpuUsage = readCpuUsageDirect()
+        val gpuUsage = readGpuUsage()
+
+        // Slow path: temps + RAM (throttled).
+        if (now - lastSlowReadTs >= SLOW_READ_INTERVAL_MS) {
+            lastSlowReadTs = now
+            cachedCpuTemp = readCpuTemp()
+            cachedGpuTemp = readGpuTemp()
+            cachedRamInfo = readRamInfo(ctx)
+        }
+        val cpuTemp = cachedCpuTemp
+        val gpuTemp = cachedGpuTemp
+        val ramInfo = cachedRamInfo
+        
+        // Read detailed info if expanded
+        var batteryTemp: Int? = null
+        var batteryLevel: Int? = null
+        var uptime = ""
+        var cpuFreqs = ""
+        var batteryCurrent = ""
+        var batteryVoltage = ""
+        var availRam = ""
+        var swapInfo = ""
+        
+        if (isExpanded) {
+            // Expanded details can be expensive (lots of /sys reads). Throttle them more aggressively.
+            if (now - lastDetailReadTs >= DETAIL_READ_INTERVAL_MS) {
+                lastDetailReadTs = now
+                cachedBatteryTemp = readBatteryTemp()
+                cachedBatteryLevel = readBatteryLevel(ctx)
+                cachedUptime = getUptime()
+                cachedCpuFreqs = getCpuFrequencies()
+                cachedBatteryCurrent = getBatteryCurrent()
+                cachedBatteryVoltage = getBatteryVoltage()
+                cachedSwapInfo = getSwapInfo()
+            }
+            cachedAvailRam = getAvailableRam(ramInfo)
+
+            batteryTemp = cachedBatteryTemp
+            batteryLevel = cachedBatteryLevel
+            uptime = cachedUptime
+            cpuFreqs = cachedCpuFreqs
+            batteryCurrent = cachedBatteryCurrent
+            batteryVoltage = cachedBatteryVoltage
+            availRam = cachedAvailRam
+            swapInfo = cachedSwapInfo
+        }
+        
+        handler.post {
+            cpuTextView?.text = formatCpuText(cpuUsage, cpuTemp)
+            gpuTextView?.text = formatGpuText(gpuUsage, gpuTemp)
+            ramTextView?.text = formatRamText(ramInfo)
+            tempTextView?.text = formatTempText(cpuTemp, gpuTemp)
             
             if (isExpanded) {
-                batteryTemp = readBatteryTemp()
-                batteryLevel = readBatteryLevel(ctx)
-                uptime = getUptime()
-                cpuFreqs = getCpuFrequencies()
-                batteryCurrent = getBatteryCurrent()
-                batteryVoltage = getBatteryVoltage()
-                availRam = getAvailableRam(ramInfo)
-                swapInfo = getSwapInfo()
+                detailTextView1?.text = "━━━━ BATTERY ━━━━"
+                detailTextView2?.text = "Level: ${batteryLevel ?: 0}%  Temp: ${batteryTemp ?: 0}°C"
+                detailTextView3?.text = "Current: $batteryCurrent  Volt: $batteryVoltage"
+                detailTextView4?.text = "━━━━ SYSTEM ━━━━"
+                detailTextView5?.text = "Uptime: $uptime  $swapInfo"
+                detailTextView6?.text = "Free RAM: $availRam"
+                detailTextView7?.text = cpuFreqs
+                detailTextView8?.text = "▲ Tap to collapse"
             }
-            
-            handler.post {
-                cpuTextView?.text = formatCpuText(cpuUsage, cpuTemp)
-                gpuTextView?.text = formatGpuText(gpuUsage, gpuTemp)
-                ramTextView?.text = formatRamText(ramInfo)
-                tempTextView?.text = formatTempText(cpuTemp, gpuTemp)
-                
-                if (isExpanded) {
-                    detailTextView1?.text = "━━━━ BATTERY ━━━━"
-                    detailTextView2?.text = "Level: ${batteryLevel ?: 0}%  Temp: ${batteryTemp ?: 0}°C"
-                    detailTextView3?.text = "Current: $batteryCurrent  Volt: $batteryVoltage"
-                    detailTextView4?.text = "━━━━ SYSTEM ━━━━"
-                    detailTextView5?.text = "Uptime: $uptime  $swapInfo"
-                    detailTextView6?.text = "Free RAM: $availRam"
-                    detailTextView7?.text = cpuFreqs
-                    detailTextView8?.text = "▲ Tap to collapse"
-                }
-            }
-        }.start()
+        }
     }
     
     private fun toggleExpandedMode() {
@@ -468,6 +519,17 @@ class FloatingWindowHooks : BaseHook() {
     }
     
     private fun readCpuTemp(): Int? {
+        val cached = cachedCpuThermalZone
+        if (cached >= 0) {
+            val raw = readFile("/sys/class/thermal/thermal_zone$cached/temp")?.trim()
+            val v = raw?.toIntOrNull()
+            if (v != null) {
+                val c = if (v > 1000 || v < -1000) v / 1000 else v
+                if (c in 0..120) return c
+            }
+            cachedCpuThermalZone = -1
+        }
+
         // Try specific thermal zones first
         val zonePaths = listOf(
             "/sys/class/thermal/thermal_zone25/temp",
@@ -498,7 +560,10 @@ class FloatingWindowHooks : BaseHook() {
                 val raw = readFile("/sys/class/thermal/thermal_zone$i/temp")?.trim() ?: continue
                 val v = raw.toIntOrNull() ?: continue
                 val c = if (v > 1000 || v < -1000) v / 1000 else v
-                if (c in 0..120) return c
+                if (c in 0..120) {
+                    cachedCpuThermalZone = i
+                    return c
+                }
             }
         }
         return null
@@ -524,6 +589,17 @@ class FloatingWindowHooks : BaseHook() {
     }
     
     private fun readGpuTemp(): Int? {
+        val cached = cachedGpuThermalZone
+        if (cached >= 0) {
+            val raw = readFile("/sys/class/thermal/thermal_zone$cached/temp")?.trim()
+            val v = raw?.toIntOrNull()
+            if (v != null) {
+                val c = if (v > 1000 || v < -1000) v / 1000 else v
+                if (c in 0..120) return c
+            }
+            cachedGpuThermalZone = -1
+        }
+
         // kgsl temp
         val rawKgsl = readFile("/sys/class/kgsl/kgsl-3d0/temp")?.trim()
         val kgslValue = rawKgsl?.toIntOrNull()
@@ -538,7 +614,10 @@ class FloatingWindowHooks : BaseHook() {
                 val raw = readFile("/sys/class/thermal/thermal_zone$i/temp")?.trim() ?: continue
                 val v = raw.toIntOrNull() ?: continue
                 val c = if (v > 1000 || v < -1000) v / 1000 else v
-                if (c in 0..120) return c
+                if (c in 0..120) {
+                    cachedGpuThermalZone = i
+                    return c
+                }
             }
         }
         return null
@@ -568,14 +647,12 @@ class FloatingWindowHooks : BaseHook() {
     }
     
     private fun readFile(path: String): String? {
-        // Prefer root so we don't depend on the hooked process' (e.g. SystemUI) file access.
-        RootShell.cat(path)?.let { return it }
-
+        // Prefer direct reads first (much cheaper than hopping through su for every file).
         return try {
             java.io.File(path).takeIf { it.exists() && it.canRead() }?.readText()
         } catch (_: Throwable) {
             null
-        }
+        } ?: RootShell.cat(path)
     }
     
     private fun loadNothingFont(context: Context): Typeface {
@@ -645,6 +722,8 @@ class FloatingWindowHooks : BaseHook() {
             }
             floatingView = null
             floatingViewCreated = false
+            unregisterScreenReceiver()
+            statsUpdaterRunning = false
         } catch (_: Throwable) {}
     }
     
@@ -659,8 +738,6 @@ class FloatingWindowHooks : BaseHook() {
     companion object {
         const val PREF_FLOATING_WINDOW_ENABLED = "pref_floating_window_enabled"
         const val PREF_FLOATING_WINDOW_SIZE = "pref_floating_window_size"
-        
-        private const val UPDATE_INTERVAL_MS = 1000L
         
         @Volatile private var systemUiContext: Context? = null
         @Volatile private var floatingViewCreated = false
@@ -696,6 +773,8 @@ class FloatingWindowHooks : BaseHook() {
                     floatingView?.let { windowManager?.removeView(it) }
                     floatingView = null
                     floatingViewCreated = false
+                    unregisterScreenReceiver()
+                    statsUpdaterRunning = false
                 } catch (_: Throwable) {}
             }
         }
@@ -717,5 +796,85 @@ class FloatingWindowHooks : BaseHook() {
                 }
             }
         }
+
+        private fun ensureScreenReceiver() {
+            val ctx = systemUiContext ?: return
+            if (screenReceiverRegistered) return
+            try {
+                val filter = android.content.IntentFilter().apply {
+                    addAction(android.content.Intent.ACTION_SCREEN_OFF)
+                    addAction(android.content.Intent.ACTION_SCREEN_ON)
+                }
+                val receiver = object : android.content.BroadcastReceiver() {
+                    override fun onReceive(context: Context?, intent: android.content.Intent?) {
+                        when (intent?.action) {
+                            android.content.Intent.ACTION_SCREEN_ON -> {
+                                // Resume updates quickly when user wakes device.
+                                if (floatingViewCreated && BaseHook.getPreferenceBoolean(PREF_FLOATING_WINDOW_ENABLED, false)) {
+                                    FloatingWindowHooks().startStatsUpdater()
+                                }
+                            }
+                            android.content.Intent.ACTION_SCREEN_OFF -> {
+                                // Stop updates immediately.
+                                statsUpdaterRunning = false
+                            }
+                        }
+                    }
+                }
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                    ctx.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+                } else {
+                    ctx.registerReceiver(receiver, filter)
+                }
+                screenReceiver = receiver
+                screenReceiverRegistered = true
+            } catch (_: Throwable) {}
+        }
+
+        private fun unregisterScreenReceiver() {
+            val ctx = systemUiContext ?: return
+            if (!screenReceiverRegistered) return
+            try {
+                screenReceiver?.let { ctx.unregisterReceiver(it) }
+            } catch (_: Throwable) {
+            } finally {
+                screenReceiver = null
+                screenReceiverRegistered = false
+            }
+        }
+
+        private val statsExecutor = Executors.newSingleThreadExecutor { r ->
+            Thread(r, "NothingXpert-FloatingStats").apply { isDaemon = true }
+        }
+        private val statsUpdateInFlight = AtomicBoolean(false)
+
+        // Cached values to reduce per-tick work.
+        @Volatile private var lastSlowReadTs: Long = 0L
+        @Volatile private var lastDetailReadTs: Long = 0L
+        @Volatile private var cachedCpuTemp: Int? = null
+        @Volatile private var cachedGpuTemp: Int? = null
+        @Volatile private var cachedRamInfo: RamInfo? = null
+
+        @Volatile private var cachedBatteryTemp: Int? = null
+        @Volatile private var cachedBatteryLevel: Int? = null
+        @Volatile private var cachedUptime: String = ""
+        @Volatile private var cachedCpuFreqs: String = ""
+        @Volatile private var cachedBatteryCurrent: String = ""
+        @Volatile private var cachedBatteryVoltage: String = ""
+        @Volatile private var cachedAvailRam: String = ""
+        @Volatile private var cachedSwapInfo: String = ""
+
+        @Volatile private var cachedCpuThermalZone: Int = -1
+        @Volatile private var cachedGpuThermalZone: Int = -1
+
+        @Volatile private var statsUpdaterRunning: Boolean = false
+
+        @Volatile private var screenReceiver: android.content.BroadcastReceiver? = null
+        @Volatile private var screenReceiverRegistered: Boolean = false
+
+        private const val UPDATE_INTERVAL_COLLAPSED_MS = 2000L
+        private const val UPDATE_INTERVAL_EXPANDED_MS = 1000L
+        private const val SLOW_READ_INTERVAL_MS = 2000L
+        private const val DETAIL_READ_INTERVAL_MS = 5000L
     }
 }

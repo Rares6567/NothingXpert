@@ -85,6 +85,9 @@ class HookEntry : IXposedHookLoadPackage, XPrefs.OnPreferenceUpdateListener {
     
     override fun onPreferenceUpdated(key: String?) {
         BaseHook.clearCache(key)
+        if (key == SystemHooks.PREF_SHAKE_TORCH) {
+            SystemHooks.refreshFromPrefs()
+        }
         // Handle floating window preference changes
         if (key == FloatingWindowHooks.PREF_FLOATING_WINDOW_ENABLED || 
             key == FloatingWindowHooks.PREF_FLOATING_WINDOW_SIZE) {

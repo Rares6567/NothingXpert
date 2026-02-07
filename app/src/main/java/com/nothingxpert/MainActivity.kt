@@ -585,23 +585,14 @@ class MainActivity : AppCompatActivity() {
     private fun updateCpuUsage(force: Boolean = false) {
         // Local two-sample diff off the main thread to avoid UI lag.
         Thread {
-            var usageProp = -1
-            var tempProp: String? = null
-            try {
-                usageProp = android.provider.Settings.Global.getString(contentResolver, "nothingxpert_cpu_usage")?.toIntOrNull() ?: -1
-                tempProp = android.provider.Settings.Global.getString(contentResolver, "nothingxpert_cpu_temp")
-            } catch (_: Throwable) { }
-
             val usage = computeCpuUsageTwoSample()
             val temp = readCpuTempExact()
             runOnUiThread {
                 val tempStr = when {
-                    !tempProp.isNullOrBlank() -> "${tempProp}°C"
                     temp != null -> "${temp}°C"
                     else -> "--°C"
                 }
                 val shownUsage = when {
-                    usageProp >= 0 -> usageProp
                     usage != null -> usage
                     lastCpuUsage >= 0 -> lastCpuUsage
                     else -> 0
