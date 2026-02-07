@@ -14,8 +14,8 @@ android {
         applicationId = "com.nothingxpert"
         minSdk = 30
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.2"
+        versionCode = 13
+        versionName = "1.3"
     }
 
     signingConfigs {
