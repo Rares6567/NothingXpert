@@ -15,9 +15,11 @@ import android.os.Looper
 import android.os.HandlerThread
 import android.text.format.Formatter
 import android.util.Log
+import android.graphics.Typeface
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
@@ -84,6 +86,9 @@ class MainActivity : AppCompatActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         
         setContentView(R.layout.activity_main)
+
+        // Apply appropriate font based on language (Ndot57 for EN, VT323 for TR)
+        applyLanguageBasedFont()
 
         // Keep prefs readable for LSPosed after recreates/theme toggles
         PrefsUtil.ensurePrefsAccessible(this)
@@ -533,6 +538,7 @@ class MainActivity : AppCompatActivity() {
                 val selectedLanguage = languageCodes[which]
                 if (selectedLanguage != currentLanguage) {
                     LocaleHelper.setNewLocale(this, selectedLanguage)
+                    FontHelper.clearCache() // Clear font cache so correct font is loaded
                     PrefsUtil.ensurePrefsAccessible(this)
                     // Restart app to apply language change
                     scheduleRestartSelf()
@@ -851,6 +857,84 @@ class MainActivity : AppCompatActivity() {
             overridePendingTransition(0, 0)
             finish()
         }, 200) // small delay to let IO finish
+    }
+
+    private fun applyLanguageBasedFont() {
+        // Use VT323 for Turkish (has Turkish character support), Ndot57 for other languages
+        val typeface = FontHelper.getNothingFont(this)
+        val language = LocaleHelper.getLanguage(this)
+        val isTurkish = language == "tr"
+        
+        // Apply to title views (with larger size for Turkish)
+        findViewById<TextView>(R.id.title_nothing)?.apply {
+            this.typeface = typeface
+            if (isTurkish) textSize = 20f // was 18sp
+        }
+        findViewById<TextView>(R.id.title_xpert)?.apply {
+            this.typeface = typeface
+            if (isTurkish) textSize = 52f // was 48sp
+        }
+        
+        // Apply to tab views (with larger size for Turkish)
+        findViewById<TextView>(R.id.tab_main)?.apply {
+            this.typeface = typeface
+            if (isTurkish) textSize = 15f // was 15sp, keep same
+        }
+        findViewById<TextView>(R.id.tab_options)?.apply {
+            this.typeface = typeface
+            if (isTurkish) textSize = 15f
+        }
+        
+        // Apply to RAM/CPU/GPU monitors
+        findViewById<TextView>(R.id.ram_value)?.apply {
+            this.typeface = typeface
+            if (isTurkish) textSize = 17f // was 15sp
+        }
+        findViewById<TextView>(R.id.cpu_value)?.apply {
+            this.typeface = typeface
+            if (isTurkish) textSize = 17f
+        }
+        findViewById<TextView>(R.id.gpu_value)?.apply {
+            this.typeface = typeface
+            if (isTurkish) textSize = 17f
+        }
+        
+        // Apply to category cards (with larger size for Turkish)
+        applyFontToViewGroup(findViewById(R.id.category_lockscreen), typeface, isTurkish, 26f) // was 24sp
+        applyFontToViewGroup(findViewById(R.id.category_misc), typeface, isTurkish, 26f)
+        applyFontToViewGroup(findViewById(R.id.category_status_bar), typeface, isTurkish, 26f)
+        applyFontToViewGroup(findViewById(R.id.category_apps), typeface, isTurkish, 26f)
+        
+        // Apply to Options section (with larger size for Turkish)
+        applyFontToViewGroup(findViewById(R.id.section_options), typeface, isTurkish, 26f)
+        
+        // Apply to language value text
+        findViewById<TextView>(R.id.language_value)?.apply {
+            this.typeface = typeface
+            if (isTurkish) textSize = 18f // was 16sp
+        }
+    }
+    
+    private fun applyFontToViewGroup(view: View?, typeface: Typeface, isTurkish: Boolean = false, turkishTextSize: Float = 0f) {
+        view ?: return
+        if (view is ViewGroup) {
+            for (i in 0 until view.childCount) {
+                val child = view.getChildAt(i)
+                if (child is TextView) {
+                    child.typeface = typeface
+                    // Increase text size for Turkish on TextViews that already have the custom font
+                    if (isTurkish && turkishTextSize > 0) {
+                        // Only apply to titles (bold text style or specific text sizes)
+                        val currentSize = child.textSize / resources.displayMetrics.scaledDensity
+                        if (currentSize >= 20f) { // Only increase titles, not summaries
+                            child.textSize = turkishTextSize
+                        }
+                    }
+                } else if (child is ViewGroup) {
+                    applyFontToViewGroup(child, typeface, isTurkish, turkishTextSize)
+                }
+            }
+        }
     }
 
     companion object {
