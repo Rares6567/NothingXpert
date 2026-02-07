@@ -862,8 +862,7 @@ class MainActivity : AppCompatActivity() {
     private fun applyLanguageBasedFont() {
         // Use VT323 for Turkish (has Turkish character support), Ndot57 for other languages
         val typeface = FontHelper.getNothingFont(this)
-        val language = LocaleHelper.getLanguage(this)
-        val isTurkish = language == "tr"
+        val isTurkish = LocaleHelper.isTurkish(this)
         
         // Apply to title views (with larger size for Turkish)
         findViewById<TextView>(R.id.title_nothing)?.apply {

@@ -12,12 +12,13 @@ object FontHelper {
     /**
      * Returns the appropriate Nothing-style font based on current language.
      * Uses Ndot57 for English, VT323 for Turkish (which has Turkish character support).
+     * Also checks system language if app is set to "System Default".
      */
     fun getNothingFont(context: Context): Typeface {
-        val language = LocaleHelper.getLanguage(context)
-        return when (language) {
-            "tr" -> getVT323(context)
-            else -> getNdot57(context)
+        return if (LocaleHelper.isTurkish(context)) {
+            getVT323(context)
+        } else {
+            getNdot57(context)
         }
     }
     

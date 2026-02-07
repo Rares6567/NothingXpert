@@ -63,4 +63,27 @@ object LocaleHelper {
     fun getLanguageEntries(): Array<String> {
         return arrayOf("language_system_default", "language_english", "language_turkish")
     }
+
+    /**
+     * Returns the effective language code, considering both app preference and system language.
+     * If app language is set to "", returns the system language.
+     */
+    fun getEffectiveLanguage(context: Context): String {
+        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+        val appLanguage = prefs.getString(PREF_LANGUAGE, DEFAULT_LANGUAGE) ?: DEFAULT_LANGUAGE
+        
+        return if (appLanguage.isEmpty()) {
+            // App is using system default, get system language
+            Resources.getSystem().configuration.locales.get(0).language
+        } else {
+            appLanguage
+        }
+    }
+
+    /**
+     * Checks if the effective language is Turkish (either from app preference or system)
+     */
+    fun isTurkish(context: Context): Boolean {
+        return getEffectiveLanguage(context) == "tr"
+    }
 }
