@@ -81,6 +81,9 @@ class FloatingWindowHooks : BaseHook() {
     @SuppressLint("ClickableViewAccessibility")
     private fun createFloatingWindow(context: Context) {
         val wm = context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return
+
+        // Track the active instance so screen on/off receiver can pause/resume without creating new objects.
+        updaterInstance = this
         
         // Load Nothing font - try multiple approaches
         val nothingFont = loadNothingFont(context)
@@ -123,6 +126,20 @@ class FloatingWindowHooks : BaseHook() {
         detailTextView6 = createStatsTextView(context, textColor, textSize).apply { visibility = View.GONE }
         detailTextView7 = createStatsTextView(context, textColor, textSize).apply { visibility = View.GONE }
         detailTextView8 = createStatsTextView(context, textColor, textSize).apply { visibility = View.GONE }
+
+        // New views: invalidate UI caches so the first update always populates text.
+        lastCpuText = null
+        lastGpuText = null
+        lastRamText = null
+        lastTempText = null
+        lastDetail1 = null
+        lastDetail2 = null
+        lastDetail3 = null
+        lastDetail4 = null
+        lastDetail5 = null
+        lastDetail6 = null
+        lastDetail7 = null
+        lastDetail8 = null
         
         container.addView(cpuTextView)
         container.addView(gpuTextView)
@@ -244,16 +261,25 @@ class FloatingWindowHooks : BaseHook() {
     }
     
     private fun startStatsUpdater() {
+        updaterInstance = this
         if (statsUpdaterRunning) return
         ensureScreenReceiver()
         statsUpdaterRunning = true
+        // Avoid stacking callbacks if we pause/resume quickly.
+        handler.removeCallbacks(statsUpdaterRunnable)
         handler.post(statsUpdaterRunnable)
+    }
+
+    private fun stopStatsUpdater() {
+        statsUpdaterRunning = false
+        handler.removeCallbacks(statsUpdaterRunnable)
     }
 
     private val statsUpdaterRunnable = object : Runnable {
         override fun run() {
+            if (!statsUpdaterRunning) return
             if (!getPreferenceBoolean(PREF_FLOATING_WINDOW_ENABLED, false)) {
-                statsUpdaterRunning = false
+                stopStatsUpdater()
                 hideFloatingWindow()
                 return
             }
@@ -264,7 +290,7 @@ class FloatingWindowHooks : BaseHook() {
 
             if (!interactive) {
                 // Screen off/dozing: pause updates. Screen receiver will restart us.
-                statsUpdaterRunning = false
+                stopStatsUpdater()
                 return
             }
 
@@ -273,7 +299,11 @@ class FloatingWindowHooks : BaseHook() {
                 scheduleStatsUpdate()
             }
 
-            val delay = if (isExpanded) UPDATE_INTERVAL_EXPANDED_MS else UPDATE_INTERVAL_COLLAPSED_MS
+            val delay = when {
+                isExpanded -> UPDATE_INTERVAL_EXPANDED_MS
+                lowActivityStreak >= LOW_ACTIVITY_STREAK_FOR_IDLE -> UPDATE_INTERVAL_IDLE_MS
+                else -> UPDATE_INTERVAL_COLLAPSED_MS
+            }
             handler.postDelayed(this, delay)
         }
     }
@@ -298,6 +328,15 @@ class FloatingWindowHooks : BaseHook() {
         // Fast path: usage values.
         val cpuUsage = readCpuUsageDirect()
         val gpuUsage = readGpuUsage()
+        val cpuPct = (cpuUsage ?: 0).coerceIn(0, 100)
+        val gpuPct = (gpuUsage ?: 0).coerceIn(0, 100)
+
+        // Allow the scheduler to slow down when the device is basically idle.
+        if (!isExpanded && cpuPct <= LOW_ACTIVITY_PCT && gpuPct <= LOW_ACTIVITY_PCT) {
+            lowActivityStreak = (lowActivityStreak + 1).coerceAtMost(1_000)
+        } else {
+            lowActivityStreak = 0
+        }
 
         // Slow path: temps + RAM (throttled).
         if (now - lastSlowReadTs >= SLOW_READ_INTERVAL_MS) {
@@ -343,22 +382,72 @@ class FloatingWindowHooks : BaseHook() {
             availRam = cachedAvailRam
             swapInfo = cachedSwapInfo
         }
-        
+
+        val cpuText = formatCpuText(cpuUsage, cpuTemp)
+        val gpuText = formatGpuText(gpuUsage, gpuTemp)
+        val ramText = formatRamText(ramInfo)
+        val tempText = formatTempText(cpuTemp, gpuTemp)
+
+        val d1 = if (isExpanded) "━━━━ BATTERY ━━━━" else ""
+        val d2 = if (isExpanded) "Level: ${batteryLevel ?: 0}%  Temp: ${batteryTemp ?: 0}°C" else ""
+        val d3 = if (isExpanded) "Current: $batteryCurrent  Volt: $batteryVoltage" else ""
+        val d4 = if (isExpanded) "━━━━ SYSTEM ━━━━" else ""
+        val d5 = if (isExpanded) "Uptime: $uptime  $swapInfo" else ""
+        val d6 = if (isExpanded) "Free RAM: $availRam" else ""
+        val d7 = if (isExpanded) cpuFreqs else ""
+        val d8 = if (isExpanded) "▲ Tap to collapse" else ""
+
         handler.post {
-            cpuTextView?.text = formatCpuText(cpuUsage, cpuTemp)
-            gpuTextView?.text = formatGpuText(gpuUsage, gpuTemp)
-            ramTextView?.text = formatRamText(ramInfo)
-            tempTextView?.text = formatTempText(cpuTemp, gpuTemp)
+            if (cpuText != lastCpuText) {
+                cpuTextView?.text = cpuText
+                lastCpuText = cpuText
+            }
+            if (gpuText != lastGpuText) {
+                gpuTextView?.text = gpuText
+                lastGpuText = gpuText
+            }
+            if (ramText != lastRamText) {
+                ramTextView?.text = ramText
+                lastRamText = ramText
+            }
+            if (tempText != lastTempText) {
+                tempTextView?.text = tempText
+                lastTempText = tempText
+            }
             
             if (isExpanded) {
-                detailTextView1?.text = "━━━━ BATTERY ━━━━"
-                detailTextView2?.text = "Level: ${batteryLevel ?: 0}%  Temp: ${batteryTemp ?: 0}°C"
-                detailTextView3?.text = "Current: $batteryCurrent  Volt: $batteryVoltage"
-                detailTextView4?.text = "━━━━ SYSTEM ━━━━"
-                detailTextView5?.text = "Uptime: $uptime  $swapInfo"
-                detailTextView6?.text = "Free RAM: $availRam"
-                detailTextView7?.text = cpuFreqs
-                detailTextView8?.text = "▲ Tap to collapse"
+                if (d1 != lastDetail1) {
+                    detailTextView1?.text = d1
+                    lastDetail1 = d1
+                }
+                if (d2 != lastDetail2) {
+                    detailTextView2?.text = d2
+                    lastDetail2 = d2
+                }
+                if (d3 != lastDetail3) {
+                    detailTextView3?.text = d3
+                    lastDetail3 = d3
+                }
+                if (d4 != lastDetail4) {
+                    detailTextView4?.text = d4
+                    lastDetail4 = d4
+                }
+                if (d5 != lastDetail5) {
+                    detailTextView5?.text = d5
+                    lastDetail5 = d5
+                }
+                if (d6 != lastDetail6) {
+                    detailTextView6?.text = d6
+                    lastDetail6 = d6
+                }
+                if (d7 != lastDetail7) {
+                    detailTextView7?.text = d7
+                    lastDetail7 = d7
+                }
+                if (d8 != lastDetail8) {
+                    detailTextView8?.text = d8
+                    lastDetail8 = d8
+                }
             }
         }
     }
@@ -481,8 +570,15 @@ class FloatingWindowHooks : BaseHook() {
     }
     
     private fun readCpuUsageDirect(): Int? {
-        val stat = readFile("/proc/stat")
-        val line = stat?.lineSequence()?.firstOrNull { it.startsWith("cpu ") }
+        val line = try {
+            java.io.File("/proc/stat")
+                .takeIf { it.exists() && it.canRead() }
+                ?.bufferedReader()
+                ?.use { it.readLine() }
+        } catch (_: Throwable) {
+            null
+        }?.takeIf { it.startsWith("cpu ") }
+            ?: readFile("/proc/stat")?.lineSequence()?.firstOrNull { it.startsWith("cpu ") }
             ?: return lastCpuUsageValue.takeIf { it >= 0 }
         
         val parts = line.trim().split("\\s+".toRegex())
@@ -543,15 +639,25 @@ class FloatingWindowHooks : BaseHook() {
         )
         
         var best: Int? = null
+        var bestZone: Int? = null
         for (path in zonePaths) {
             val raw = readFile(path)?.trim() ?: continue
             val v = raw.toIntOrNull() ?: continue
             val c = if (v > 1000 || v < -1000) v / 1000 else v
             if (c in 0..120) {
-                best = maxOf(best ?: c, c)
+                if (best == null || c > best) {
+                    best = c
+                    bestZone = path
+                        .substringAfter("thermal_zone", missingDelimiterValue = "")
+                        .substringBefore("/")
+                        .toIntOrNull()
+                }
             }
         }
-        if (best != null) return best
+        if (best != null) {
+            bestZone?.let { cachedCpuThermalZone = it }
+            return best
+        }
         
         // Fallback: search for cpu/cpuss/soc thermal zones
         for (i in 0..120) {
@@ -624,17 +730,44 @@ class FloatingWindowHooks : BaseHook() {
     }
     
     private fun readRamInfo(context: Context): RamInfo? {
-        return try {
-            val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager ?: return null
-            val info = ActivityManager.MemoryInfo()
-            am.getMemoryInfo(info)
-            
-            val total = info.totalMem
-            val avail = info.availMem
-            val used = total - avail
-            val percent = if (total > 0) ((used.toDouble() / total) * 100).toInt() else 0
-            
-            RamInfo(
+        // Avoid binder calls in SystemUI: parse /proc/meminfo directly.
+        val memInfo = readFile("/proc/meminfo")
+        try {
+            fun parseKiB(line: String): Long? {
+                val after = line.substringAfter(':', "").trimStart()
+                if (after.isEmpty()) return null
+                val num = after.takeWhile { it.isDigit() }
+                return num.toLongOrNull()
+            }
+
+            var totalKiB: Long? = null
+            var availKiB: Long? = null
+            var freeKiB: Long? = null
+            var buffersKiB: Long? = null
+            var cachedKiB: Long? = null
+
+            val lines = memInfo?.lineSequence() ?: throw IllegalStateException("meminfo unavailable")
+            for (line in lines) {
+                when {
+                    line.startsWith("MemTotal:") -> totalKiB = parseKiB(line)
+                    line.startsWith("MemAvailable:") -> availKiB = parseKiB(line)
+                    line.startsWith("MemFree:") -> freeKiB = parseKiB(line)
+                    line.startsWith("Buffers:") -> buffersKiB = parseKiB(line)
+                    line.startsWith("Cached:") -> cachedKiB = parseKiB(line)
+                }
+
+                val hasFallbackAvail = freeKiB != null && buffersKiB != null && cachedKiB != null
+                if (totalKiB != null && (availKiB != null || hasFallbackAvail)) break
+            }
+
+            val total = (totalKiB ?: 0L) * 1024L
+            val avail = (availKiB ?: ((freeKiB ?: 0L) + (buffersKiB ?: 0L) + (cachedKiB ?: 0L))) * 1024L
+            if (total <= 0) throw IllegalStateException("invalid MemTotal")
+
+            val used = (total - avail).coerceIn(0L, total)
+            val percent = ((used.toDouble() / total.toDouble()) * 100.0).toInt().coerceIn(0, 100)
+
+            return RamInfo(
                 used = used,
                 total = total,
                 percent = percent,
@@ -642,7 +775,27 @@ class FloatingWindowHooks : BaseHook() {
                 totalFormatted = Formatter.formatShortFileSize(context, total)
             )
         } catch (_: Throwable) {
-            null
+            // Fallback to the system API.
+            return try {
+                val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager ?: return null
+                val info = ActivityManager.MemoryInfo()
+                am.getMemoryInfo(info)
+
+                val total = info.totalMem
+                val avail = info.availMem
+                val used = (total - avail).coerceAtLeast(0L)
+                val percent = if (total > 0) ((used.toDouble() / total) * 100).toInt() else 0
+
+                RamInfo(
+                    used = used,
+                    total = total,
+                    percent = percent,
+                    usedFormatted = Formatter.formatShortFileSize(context, used),
+                    totalFormatted = Formatter.formatShortFileSize(context, total)
+                )
+            } catch (_: Throwable) {
+                null
+            }
         }
     }
     
@@ -717,13 +870,14 @@ class FloatingWindowHooks : BaseHook() {
     
     private fun hideFloatingWindow() {
         try {
+            stopStatsUpdater()
             floatingView?.let { view ->
                 windowManager?.removeView(view)
             }
             floatingView = null
             floatingViewCreated = false
             unregisterScreenReceiver()
-            statsUpdaterRunning = false
+            updaterInstance = null
         } catch (_: Throwable) {}
     }
     
@@ -770,11 +924,12 @@ class FloatingWindowHooks : BaseHook() {
         fun toggleFloatingWindow() {
             if (floatingViewCreated) {
                 try {
+                    updaterInstance?.stopStatsUpdater()
                     floatingView?.let { windowManager?.removeView(it) }
                     floatingView = null
                     floatingViewCreated = false
                     unregisterScreenReceiver()
-                    statsUpdaterRunning = false
+                    updaterInstance = null
                 } catch (_: Throwable) {}
             }
         }
@@ -811,12 +966,12 @@ class FloatingWindowHooks : BaseHook() {
                             android.content.Intent.ACTION_SCREEN_ON -> {
                                 // Resume updates quickly when user wakes device.
                                 if (floatingViewCreated && BaseHook.getPreferenceBoolean(PREF_FLOATING_WINDOW_ENABLED, false)) {
-                                    FloatingWindowHooks().startStatsUpdater()
+                                    updaterInstance?.startStatsUpdater()
                                 }
                             }
                             android.content.Intent.ACTION_SCREEN_OFF -> {
                                 // Stop updates immediately.
-                                statsUpdaterRunning = false
+                                updaterInstance?.stopStatsUpdater()
                             }
                         }
                     }
@@ -867,14 +1022,36 @@ class FloatingWindowHooks : BaseHook() {
         @Volatile private var cachedCpuThermalZone: Int = -1
         @Volatile private var cachedGpuThermalZone: Int = -1
 
+        // Avoid redundant UI updates (setText/layout) when values haven't changed.
+        @Volatile private var lastCpuText: String? = null
+        @Volatile private var lastGpuText: String? = null
+        @Volatile private var lastRamText: String? = null
+        @Volatile private var lastTempText: String? = null
+        @Volatile private var lastDetail1: String? = null
+        @Volatile private var lastDetail2: String? = null
+        @Volatile private var lastDetail3: String? = null
+        @Volatile private var lastDetail4: String? = null
+        @Volatile private var lastDetail5: String? = null
+        @Volatile private var lastDetail6: String? = null
+        @Volatile private var lastDetail7: String? = null
+        @Volatile private var lastDetail8: String? = null
+
         @Volatile private var statsUpdaterRunning: Boolean = false
+
+        @Volatile private var updaterInstance: FloatingWindowHooks? = null
 
         @Volatile private var screenReceiver: android.content.BroadcastReceiver? = null
         @Volatile private var screenReceiverRegistered: Boolean = false
 
         private const val UPDATE_INTERVAL_COLLAPSED_MS = 2000L
         private const val UPDATE_INTERVAL_EXPANDED_MS = 1000L
+        private const val UPDATE_INTERVAL_IDLE_MS = 5000L
         private const val SLOW_READ_INTERVAL_MS = 2000L
         private const val DETAIL_READ_INTERVAL_MS = 5000L
+
+        private const val LOW_ACTIVITY_PCT = 5
+        private const val LOW_ACTIVITY_STREAK_FOR_IDLE = 3
+
+        @Volatile private var lowActivityStreak: Int = 0
     }
 }

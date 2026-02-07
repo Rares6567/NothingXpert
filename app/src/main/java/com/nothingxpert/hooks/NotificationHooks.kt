@@ -22,7 +22,7 @@ class NotificationHooks : BaseHook() {
                 "isNonDismissable",
                 object : XC_MethodHook() {
                     override fun afterHookedMethod(param: MethodHookParam) {
-                        val undismissablePackages = getUndismissablePackages()
+                        val undismissablePackages = getPreferenceStringSet("pref_undismissable_packages", emptySet())
                         if (undismissablePackages.isEmpty()) return
                         
                         val sbn = param.thisObject as StatusBarNotification
@@ -30,25 +30,10 @@ class NotificationHooks : BaseHook() {
                         
                         if (undismissablePackages.contains(pkg)) {
                             param.result = true
-                            log("Made notification undismissable for: $pkg")
                         }
                     }
                 }
             )
         }
-    }
-    
-    private fun getUndismissablePackages(): Set<String> {
-        if (useRemotePrefs) {
-            try {
-                val packages = com.nothingxpert.XPrefs.prefs?.getStringSet("pref_undismissable_packages", emptySet())
-                if (packages != null) return packages
-            } catch (_: Throwable) {}
-        }
-        
-        return try {
-            val xsp = getXsp() ?: return emptySet()
-            xsp.getStringSet("pref_undismissable_packages", emptySet()) ?: emptySet()
-        } catch (_: Throwable) { emptySet() }
     }
 }

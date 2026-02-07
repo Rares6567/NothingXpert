@@ -84,18 +84,7 @@ class AppLockHooks : BaseHook() {
     }
     
     private fun isAppLocked(packageName: String): Boolean {
-        if (useRemotePrefs) {
-            try {
-                val lockedSet = com.nothingxpert.XPrefs.prefs?.getStringSet("pref_locked_packages", emptySet())
-                if (lockedSet?.contains(packageName) == true) return true
-            } catch (_: Throwable) {}
-        }
-        
-        return try {
-            val xsp = getXsp() ?: return false
-            val lockedSet = xsp.getStringSet("pref_locked_packages", emptySet())
-            lockedSet?.contains(packageName) == true
-        } catch (_: Throwable) { false }
+        return getPreferenceStringSet("pref_locked_packages", emptySet()).contains(packageName)
     }
     
     private fun showLockOverlay(activity: Activity) {
