@@ -10,6 +10,7 @@ import android.view.View
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
+import com.nothingxpert.util.RootShell
 
 class SystemHooks : BaseHook() {
     override val tag = "System"
@@ -137,11 +138,8 @@ class SystemHooks : BaseHook() {
     }
     
     private fun sampleCpuUsage(): Int? {
-        val line = try {
-            java.io.File("/proc/stat").bufferedReader().useLines { seq ->
-                seq.firstOrNull { it.startsWith("cpu ") }
-            }
-        } catch (_: Throwable) { null } ?: return null
+        val stat = readFile("/proc/stat") ?: return null
+        val line = stat.lineSequence().firstOrNull { it.startsWith("cpu ") } ?: return null
         val parts = line.trim().split("\\s+".toRegex())
         if (parts.size < 8) return null
         val user = parts[1].toLongOrNull() ?: return null
@@ -171,20 +169,43 @@ class SystemHooks : BaseHook() {
     }
     
     private fun readCpuTemp(): Int? {
-        for (i in 0..120) {
-            val type = try {
-                java.io.File("/sys/class/thermal/thermal_zone$i/type").readText().trim().lowercase()
-            } catch (_: Throwable) { continue }
-            if (type.contains("cpu") || type.contains("cpuss") || type.contains("soc")) {
-                val raw = try {
-                    java.io.File("/sys/class/thermal/thermal_zone$i/temp").readText().trim()
-                } catch (_: Throwable) { continue }
-                val v = raw.toIntOrNull() ?: continue
+        val cached = cachedCpuThermalZone
+        if (cached >= 0) {
+            val raw = readFile("/sys/class/thermal/thermal_zone$cached/temp")?.trim()
+            val v = raw?.toIntOrNull()
+            if (v != null) {
                 val c = if (v > 1000 || v < -1000) v / 1000 else v
                 if (c in 0..120) return c
             }
+            cachedCpuThermalZone = -1
+        }
+
+        for (i in 0..120) {
+            val type = readFile("/sys/class/thermal/thermal_zone$i/type")
+                ?.trim()
+                ?.lowercase()
+                ?: continue
+            if (type.contains("cpu") || type.contains("cpuss") || type.contains("soc")) {
+                val raw = readFile("/sys/class/thermal/thermal_zone$i/temp")?.trim() ?: continue
+                val v = raw.toIntOrNull() ?: continue
+                val c = if (v > 1000 || v < -1000) v / 1000 else v
+                if (c in 0..120) {
+                    cachedCpuThermalZone = i
+                    return c
+                }
+            }
         }
         return null
+    }
+
+    private fun readFile(path: String): String? {
+        // Prefer root so we don't depend on the hooked process' (android/SystemUI) file access.
+        RootShell.cat(path)?.let { return it }
+        return try {
+            java.io.File(path).takeIf { it.exists() && it.canRead() }?.readText()
+        } catch (_: Throwable) {
+            null
+        }
     }
     
     private fun installStatusBarDoubleTapHook(lpparam: XC_LoadPackage.LoadPackageParam) {
@@ -262,5 +283,6 @@ class SystemHooks : BaseHook() {
         @Volatile private var cpuReporterStarted = false
         @Volatile private var lastCpuTotal = -1L
         @Volatile private var lastCpuIdle = -1L
+        @Volatile private var cachedCpuThermalZone = -1
     }
 }

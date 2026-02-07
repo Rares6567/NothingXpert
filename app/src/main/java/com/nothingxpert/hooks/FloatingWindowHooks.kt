@@ -20,6 +20,7 @@ import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
 import com.nothingxpert.XPrefs
+import com.nothingxpert.util.RootShell
 
 /**
  * Creates a floating window overlay that shows real-time system stats:
@@ -262,23 +263,9 @@ class FloatingWindowHooks : BaseHook() {
         
         // Update on background thread, post to UI
         Thread {
-            // Read CPU from Settings.Global (written by SystemHooks CPU reporter)
-            var cpuUsage: Int? = null
-            var cpuTemp: Int? = null
-            try {
-                val usageStr = android.provider.Settings.Global.getString(ctx.contentResolver, "nothingxpert_cpu_usage")
-                cpuUsage = usageStr?.toIntOrNull()
-                val tempStr = android.provider.Settings.Global.getString(ctx.contentResolver, "nothingxpert_cpu_temp")
-                cpuTemp = tempStr?.toIntOrNull()
-            } catch (_: Throwable) { }
-            
-            // Fallback to direct read if Settings.Global doesn't have data
-            if (cpuUsage == null) {
-                cpuUsage = readCpuUsageDirect()
-            }
-            if (cpuTemp == null) {
-                cpuTemp = readCpuTemp()
-            }
+            // Read via root shell instead of relying on a separate LSPosed CPU reporter.
+            val cpuUsage = readCpuUsageDirect()
+            val cpuTemp = readCpuTemp()
             
             val gpuUsage = readGpuUsage()
             val gpuTemp = readGpuTemp()
@@ -443,11 +430,9 @@ class FloatingWindowHooks : BaseHook() {
     }
     
     private fun readCpuUsageDirect(): Int? {
-        val line = try {
-            java.io.File("/proc/stat").bufferedReader().useLines { seq ->
-                seq.firstOrNull { it.startsWith("cpu ") }
-            }
-        } catch (_: Throwable) { null } ?: return lastCpuUsageValue.takeIf { it >= 0 }
+        val stat = readFile("/proc/stat")
+        val line = stat?.lineSequence()?.firstOrNull { it.startsWith("cpu ") }
+            ?: return lastCpuUsageValue.takeIf { it >= 0 }
         
         val parts = line.trim().split("\\s+".toRegex())
         if (parts.size < 5) return lastCpuUsageValue.takeIf { it >= 0 }
@@ -583,6 +568,9 @@ class FloatingWindowHooks : BaseHook() {
     }
     
     private fun readFile(path: String): String? {
+        // Prefer root so we don't depend on the hooked process' (e.g. SystemUI) file access.
+        RootShell.cat(path)?.let { return it }
+
         return try {
             java.io.File(path).takeIf { it.exists() && it.canRead() }?.readText()
         } catch (_: Throwable) {

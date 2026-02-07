@@ -29,6 +29,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updatePadding
 import com.google.android.material.appbar.AppBarLayout
 import java.io.DataOutputStream
+import com.nothingxpert.util.RootShell
 import kotlin.system.exitProcess
 
 class MainActivity : AppCompatActivity() {
@@ -660,7 +661,15 @@ class MainActivity : AppCompatActivity() {
         } catch (e: Exception) {
             Log.w(CPU_LOG_TAG, "direct /proc/stat read failed", e)
         }
-        // Fallback via shell (non-root)
+        // Fallback via root shell (persistent)
+        try {
+            val out = RootShell.cat("/proc/stat", timeoutMs = 1500L)
+            val line = out?.lineSequence()?.firstOrNull { it.startsWith("cpu ") }
+            if (line != null) return line
+        } catch (e: Exception) {
+            Log.w(CPU_LOG_TAG, "root cat /proc/stat failed", e)
+        }
+        // Last resort: fallback via shell (non-root)
         try {
             val process = ProcessBuilder("sh", "-c", "cat /proc/stat").redirectErrorStream(true).start()
             process.inputStream.bufferedReader().useLines { seq ->
@@ -763,6 +772,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun readFileSafe(path: String): String? {
+        // Prefer root so we don't depend on app sandbox/SELinux visibility for sysfs/proc.
+        RootShell.cat(path)?.let { return it }
+
         // Try direct read
         try {
             java.io.File(path).takeIf { it.exists() }?.let { return it.readText() }
