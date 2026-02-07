@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Volume long-press action entries (display names) -->
+    <string-array name="volume_action_entries">
+        <item>@string/volume_action_default</item>
+        <item>@string/volume_action_none</item>
+        <item>@string/volume_action_flashlight</item>
+        <item>@string/volume_action_play_pause</item>
+        <item>@string/volume_action_next</item>
+        <item>@string/volume_action_previous</item>
+    </string-array>
+</resources>

@@ -212,6 +212,56 @@
                             android:layout_height="wrap_content" />
                     </LinearLayout>
 
+                    <!-- Language Selector Card -->
+                    <LinearLayout
+                        android:id="@+id/card_language"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:minHeight="72dp"
+                        android:layout_marginTop="16dp"
+                        android:background="@drawable/container_single"
+                        android:paddingStart="?android:attr/listPreferredItemPaddingStart"
+                        android:paddingEnd="?android:attr/listPreferredItemPaddingEnd"
+                        android:clickable="true"
+                        android:focusable="true">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical"
+                            android:paddingVertical="16dp">
+
+                            <TextView
+                                android:text="@string/pref_language_title"
+                                android:textColor="?attr/colorOnSurface"
+                                android:textSize="20sp"
+                                android:textStyle="bold"
+                                android:fontFamily="@font/ndot57"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content" />
+
+                            <TextView
+                                android:id="@+id/language_summary"
+                                android:text="@string/pref_language_summary"
+                                android:textColor="?attr/colorOnSurfaceVariant"
+                                android:textSize="14sp"
+                                android:alpha="0.8"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content" />
+                        </LinearLayout>
+
+                        <TextView
+                            android:id="@+id/language_value"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:textSize="14sp"
+                            android:textColor="?attr/colorPrimary"
+                            android:fontFamily="@font/ndot57" />
+                    </LinearLayout>
+
                 </LinearLayout>
 
             </FrameLayout>

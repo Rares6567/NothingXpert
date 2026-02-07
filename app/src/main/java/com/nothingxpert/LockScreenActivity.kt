@@ -29,7 +29,7 @@ class LockScreenActivity : Activity() {
 
         // Title
         val textView = TextView(this)
-        textView.text = "Locked"
+        textView.text = getString(R.string.lockscreen_locked_text)
         textView.setTextColor(android.graphics.Color.WHITE)
         textView.textSize = 24f
         textView.gravity = android.view.Gravity.CENTER
@@ -49,8 +49,8 @@ class LockScreenActivity : Activity() {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
             val executor = Executors.newSingleThreadExecutor()
             val biometricPrompt = BiometricPrompt.Builder(this)
-                .setTitle("Unlock App")
-                .setSubtitle("Authenticate to open")
+                .setTitle(getString(R.string.biometric_unlock_title))
+                .setSubtitle(getString(R.string.biometric_unlock_subtitle))
                 .setAllowedAuthenticators(android.hardware.biometrics.BiometricManager.Authenticators.BIOMETRIC_STRONG or android.hardware.biometrics.BiometricManager.Authenticators.DEVICE_CREDENTIAL)
                 .build()
                 

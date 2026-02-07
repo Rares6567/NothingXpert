@@ -1,7 +1,6 @@
 package com.nothingxpert
 
 import android.os.Bundle
-import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -9,7 +8,7 @@ import androidx.core.view.updatePadding
 import com.google.android.material.appbar.AppBarLayout
 import com.google.android.material.appbar.MaterialToolbar
 
-class SettingsActivity : AppCompatActivity() {
+class SettingsActivity : BaseActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         // Apply AMOLED theme if enabled
         val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)

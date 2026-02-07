@@ -10,7 +10,7 @@ import androidx.core.view.updatePadding
 import com.google.android.material.appbar.AppBarLayout
 import com.google.android.material.appbar.MaterialToolbar
 
-class AppsActivity : AppCompatActivity() {
+class AppsActivity : BaseActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
         if (prefs.getBoolean("pref_amoled_theme", false)) {

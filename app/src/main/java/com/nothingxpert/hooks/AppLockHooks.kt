@@ -94,7 +94,7 @@ class AppLockHooks : BaseHook() {
         frameLayout.isFocusable = true
         
         val textView = TextView(activity)
-        textView.text = "Locked by Nothing Xpert"
+        textView.text = "Locked"
         textView.setTextColor(Color.WHITE)
         textView.textSize = 20f
         textView.gravity = Gravity.CENTER

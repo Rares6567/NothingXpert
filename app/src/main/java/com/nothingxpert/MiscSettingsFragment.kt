@@ -7,7 +7,7 @@ import android.util.Log
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
 
-class MiscSettingsFragment : PreferenceFragmentCompat() {
+class MiscSettingsFragment : BasePreferenceFragment() {
 
     private val logTag = "NothingXpert"
 

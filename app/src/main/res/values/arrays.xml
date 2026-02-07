@@ -9,12 +9,12 @@
 
     <!-- Volume long-press action entries (display names) -->
     <string-array name="volume_action_entries">
-        <item>Default (volume change)</item>
-        <item>Do nothing</item>
-        <item>Toggle flashlight</item>
-        <item>Play/Pause media</item>
-        <item>Next track</item>
-        <item>Previous track</item>
+        <item>@string/volume_action_default</item>
+        <item>@string/volume_action_none</item>
+        <item>@string/volume_action_flashlight</item>
+        <item>@string/volume_action_play_pause</item>
+        <item>@string/volume_action_next</item>
+        <item>@string/volume_action_previous</item>
     </string-array>
 
     <!-- Volume long-press action values -->

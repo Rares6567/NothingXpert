@@ -76,4 +76,29 @@
     <string name="floating_window_size_small">Small</string>
     <string name="floating_window_size_medium">Medium</string>
     <string name="floating_window_size_large">Large</string>
+
+    <!-- Language -->
+    <string name="pref_category_language">Language</string>
+    <string name="language_category_summary">Change app language</string>
+    <string name="pref_language_title">App Language</string>
+    <string name="pref_language_summary">Select your preferred language</string>
+    <string name="language_english">English</string>
+    <string name="language_turkish">Turkish</string>
+    <string name="language_system_default">System Default</string>
+
+    <!-- Hardcoded strings that were missing -->
+    <string name="toast_systemui_restarting">SystemUI restarting…</string>
+    <string name="toast_systemui_restart_failed">Failed to restart SystemUI: %1$s</string>
+    <string name="biometric_unlock_title">Unlock App</string>
+    <string name="biometric_unlock_subtitle">Authenticate to open</string>
+    <string name="app_lock_locked_text">Locked by Nothing Xpert</string>
+    <string name="lockscreen_locked_text">Locked</string>
+
+    <!-- Volume action entries -->
+    <string name="volume_action_default">Default (volume change)</string>
+    <string name="volume_action_none">Do nothing</string>
+    <string name="volume_action_flashlight">Toggle flashlight</string>
+    <string name="volume_action_play_pause">Play/Pause media</string>
+    <string name="volume_action_next">Next track</string>
+    <string name="volume_action_previous">Previous track</string>
 </resources>

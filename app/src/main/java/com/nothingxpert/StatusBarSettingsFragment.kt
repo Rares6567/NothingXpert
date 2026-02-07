@@ -4,7 +4,7 @@ import android.content.Context
 import android.os.Bundle
 import androidx.preference.PreferenceFragmentCompat
 
-class StatusBarSettingsFragment : PreferenceFragmentCompat() {
+class StatusBarSettingsFragment : BasePreferenceFragment() {
     
     private val prefListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
         // Delay to allow async apply() to write file, then fix permissions

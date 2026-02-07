@@ -1,0 +1,104 @@
+<resources>
+    <string name="app_name">NothingXpert</string>
+    <string name="xposed_description">NothingOS kilit ekranında tek dokunuşla uyku modunu etkinleştirir.</string>
+    <string name="status_text">Tek dokunuşla uyku, SystemUI LSPosed kancası tarafından yönetilir.</string>
+    <string name="pref_category_lockscreen">Kilit Ekranı</string>
+    <string name="lockscreen_category_summary">Tek dokunuşla uyku ve diğer kilit ekranı ayarları</string>
+    <string name="pref_single_tap_sleep_title">Tek dokunuşla uyku</string>
+    <string name="pref_single_tap_sleep_summary">Kilit ekranında tek dokunuşla ekranı kapat</string>
+    <string name="pref_shuffle_pin_title">PIN tuşlarını karıştır</string>
+    <string name="pref_shuffle_pin_summary">Kilit ekranında PIN tuş takımı düzenini rastgele yap</string>
+    <string name="general_on">Açık</string>
+    <string name="general_off">Kapalı</string>
+    <string name="restart_systemui">SystemUI Yeniden Başlat</string>
+    <string name="pref_category_misc">Çeşitli</string>
+    <string name="misc_category_summary">Diğer ayarlar ve özelleştirmeler</string>
+    <string name="pref_allow_secure_title">Kısıtlı içerikten ekran görüntüsüne izin ver</string>
+    <string name="pref_allow_secure_summary">Güvenli bayrağı kaldırarak engellenen yerlerde ekran görüntüleri ve kayıtların çalışmasını sağla</string>
+    <string name="pref_shake_torch_title">Sallayarak feneri aç/kapat</string>
+    <string name="pref_shake_torch_summary">Ekran kapalıyken telefonu sallayarak feneri aç veya kapat</string>
+    <string name="pref_hide_ime_bar_title">Gboard boşluğunu kaldır</string>
+    <string name="pref_hide_ime_bar_summary">Klavyenin üzerindeki dünya/ok şeridini kaldır</string>
+    <string name="pref_double_tap_wake_title">Çift dokunuşla uyandır</string>
+    <string name="pref_double_tap_wake_summary">Tek dokunuşla uyandırmayı devre dışı bırak ve çift dokunuş iste</string>
+    <string name="app_lock_title">Uygulama Kilidi</string>
+    <string name="app_lock_summary">Kilitlemek istediğin uygulamaları seç</string>
+    <string name="app_lock_sort">Sırala</string>
+    <string name="app_lock_filter">Filtrele</string>
+    <string name="app_lock_filter_all">Tüm uygulamalar gösteriliyor</string>
+    <string name="app_lock_filter_locked">Sadece kilitli uygulamalar gösteriliyor</string>
+    <string name="pref_category_remap_buttons">Tuşları Yeniden Ayarla</string>
+    <string name="pref_volume_up_action_title">Ses yukarı uzun basma</string>
+    <string name="pref_volume_down_action_title">Ses aşağı uzun basma</string>
+
+    <!-- RAM monitor -->
+    <string name="ram_monitor_title">RAM kullanımı</string>
+    <string name="ram_monitor_placeholder">RAM: -- / -- (--%%)</string>
+    <string name="ram_monitor_format">RAM: %1$s / %2$s (%3$d%%)</string>
+
+    <!-- CPU / GPU -->
+    <string name="cpu_monitor_placeholder">CPU: --%% (--°C)</string>
+    <string name="cpu_monitor_format">CPU: %1$d%% (%2$s)</string>
+    <string name="gpu_monitor_placeholder">GPU: --%% (--°C)</string>
+    <string name="gpu_monitor_format">GPU: %1$s (%2$s)</string>
+
+    <!-- Bottom tabs / Options sheet -->
+    <string name="tab_main">Ana</string>
+    <string name="tab_options">Seçenekler</string>
+    <string name="pref_category_apps">Uygulamalar</string>
+    <string name="apps_category_summary">Uygulama Kilidi ve diğer uygulama ayarları</string>
+    <string name="options_menu_title">Seçenekler</string>
+    <string name="options_menu_subtitle">Bölümlere hızlı erişim</string>
+    <string name="option_amoled_title">AMOLED Teması</string>
+    <string name="option_amoled_summary">Tam siyah arka plan kullan</string>
+    
+    <!-- Status Bar -->
+    <string name="pref_category_status_bar">Durum Çubuğu</string>
+    <string name="status_bar_category_summary">Durum çubuğu hareketleri ve özelleştirmeleri</string>
+    <string name="pref_category_gestures">Hareketler</string>
+    <string name="pref_status_bar_double_tap_title">Çift dokunuşla uyku</string>
+    <string name="pref_status_bar_double_tap_summary">Durum çubuğuna çift dokunarak ekranı kapat</string>
+
+    <string name="app_lock_button">Uygulama Kilidi</string>
+
+    <!-- Undismissable Notifications -->
+    <string name="pref_undismissable_notifs_title">Kapatılamaz Bildirimler</string>
+    <string name="pref_undismissable_notifs_summary">Bildirimleri kapatılamayan uygulamaları seç</string>
+    <string name="pref_undismissable_notifs_picker_summary">Kaydırarak kapatılamayan bildirimler gösterilecek uygulamaları seç</string>
+    <string name="undismissable_notifs_filter_all">Tüm uygulamalar gösteriliyor</string>
+    <string name="undismissable_notifs_filter_selected">Sadece seçili uygulamalar gösteriliyor</string>
+
+    <!-- Floating Window -->
+    <string name="pref_category_floating_window">Yüzen İstatistikler</string>
+    <string name="pref_floating_window_title">Yüzen İstatistik Katmanı</string>
+    <string name="pref_floating_window_summary">Gerçek zamanlı CPU, GPU, RAM kullanımı ve sıcaklıkları gösteren sürüklenebilir bir katman göster</string>
+    <string name="pref_floating_window_size_title">Metin Boyutu</string>
+    <string name="floating_window_size_small">Küçük</string>
+    <string name="floating_window_size_medium">Orta</string>
+    <string name="floating_window_size_large">Büyük</string>
+
+    <!-- Language -->
+    <string name="pref_category_language">Dil</string>
+    <string name="language_category_summary">Uygulama dilini değiştir</string>
+    <string name="pref_language_title">Uygulama Dili</string>
+    <string name="pref_language_summary">Tercih ettiğin dili seç</string>
+    <string name="language_english">İngilizce</string>
+    <string name="language_turkish">Türkçe</string>
+    <string name="language_system_default">Sistem Varsayılanı</string>
+
+    <!-- Hardcoded strings that were missing -->
+    <string name="toast_systemui_restarting">SystemUI yeniden başlatılıyor…</string>
+    <string name="toast_systemui_restart_failed">SystemUI yeniden başlatma başarısız: %1$s</string>
+    <string name="biometric_unlock_title">Uygulamanın Kilidini Aç</string>
+    <string name="biometric_unlock_subtitle">Açmak için kimlik doğrula</string>
+    <string name="app_lock_locked_text">Nothing Xpert tarafından kilitlendi</string>
+    <string name="lockscreen_locked_text">Kilitli</string>
+
+    <!-- Volume action entries -->
+    <string name="volume_action_default">Varsayılan (ses değişimi)</string>
+    <string name="volume_action_none">Hiçbir şey yapma</string>
+    <string name="volume_action_flashlight">Feneri aç/kapat</string>
+    <string name="volume_action_play_pause">Medyayı Oynat/Duraklat</string>
+    <string name="volume_action_next">Sonraki parça</string>
+    <string name="volume_action_previous">Önceki parça</string>
+</resources>

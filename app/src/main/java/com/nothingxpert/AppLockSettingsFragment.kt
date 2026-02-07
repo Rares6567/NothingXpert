@@ -18,6 +18,10 @@ import com.nothingxpert.HookEntry.Companion.MODULE_PKG
 
 class AppLockSettingsFragment : Fragment() {
 
+    override fun onAttach(context: Context) {
+        super.onAttach(LocaleHelper.setLocale(context))
+    }
+
     private lateinit var recyclerView: RecyclerView
     private lateinit var progressBar: ProgressBar
     private lateinit var prefs: SharedPreferences

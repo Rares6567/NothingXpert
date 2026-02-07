@@ -9,7 +9,7 @@ import androidx.core.view.updatePadding
 import com.google.android.material.appbar.AppBarLayout
 import com.google.android.material.appbar.MaterialToolbar
 
-class UndismissableNotifsSettingsActivity : AppCompatActivity() {
+class UndismissableNotifsSettingsActivity : BaseActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         // Apply AMOLED theme if enabled
         val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)

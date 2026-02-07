@@ -4,6 +4,7 @@ import android.animation.ArgbEvaluator
 import android.animation.ValueAnimator
 import android.app.ActivityManager
 import android.app.AlarmManager
+import android.content.Context
 import android.app.PendingIntent
 import android.content.Intent
 import android.content.res.ColorStateList
@@ -31,8 +32,14 @@ import com.google.android.material.appbar.AppBarLayout
 import java.io.DataOutputStream
 import com.nothingxpert.util.RootShell
 import kotlin.system.exitProcess
+import androidx.appcompat.app.AlertDialog
 
 class MainActivity : AppCompatActivity() {
+
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(LocaleHelper.setLocale(newBase))
+    }
+
     private val ramHandler = Handler(Looper.getMainLooper())
     private val mainHandler = Handler(Looper.getMainLooper())
     private val ramUpdateRunnable = object : Runnable {
@@ -55,6 +62,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tabOptions: TextView
     private lateinit var sectionMain: View
     private lateinit var sectionOptions: View
+    private lateinit var languageValue: TextView
 
     private var lastCpuIdle: Long = 0
     private var lastCpuTotal: Long = 0
@@ -133,6 +141,7 @@ class MainActivity : AppCompatActivity() {
         setupAppsCategory()
         setupRamMonitor()
         setupTabBar()
+        setupLanguageCard()
         
         // Animate on startup
         animateTitleOnStartup()
@@ -274,12 +283,12 @@ class MainActivity : AppCompatActivity() {
             // Schedule app auto-restart in background, then kill this process
             PrefsUtil.ensurePrefsAccessible(this)
             scheduleSelfRestart(1200)
-            Toast.makeText(this, "SystemUI restarting…", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.toast_systemui_restarting), Toast.LENGTH_SHORT).show()
             finishAffinity()
             android.os.Process.killProcess(android.os.Process.myPid())
             exitProcess(0)
         } catch (e: Exception) {
-            Toast.makeText(this, "Failed to restart SystemUI: ${e.message}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.toast_systemui_restart_failed, e.message), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -484,6 +493,54 @@ class MainActivity : AppCompatActivity() {
             PrefsUtil.ensurePrefsAccessible(this)
             scheduleRestartSelf()
         }
+    }
+
+    private fun setupLanguageCard() {
+        languageValue = findViewById(R.id.language_value)
+        val cardLanguage = findViewById<View>(R.id.card_language)
+        
+        updateLanguageDisplay()
+        
+        cardLanguage.setOnClickListener {
+            showLanguageDialog()
+        }
+    }
+
+    private fun updateLanguageDisplay() {
+        val currentLanguage = LocaleHelper.getLanguage(this)
+        val displayText = when (currentLanguage) {
+            "en" -> getString(R.string.language_english)
+            "tr" -> getString(R.string.language_turkish)
+            else -> getString(R.string.language_system_default)
+        }
+        languageValue.text = displayText
+    }
+
+    private fun showLanguageDialog() {
+        val languages = arrayOf(
+            getString(R.string.language_system_default),
+            getString(R.string.language_english),
+            getString(R.string.language_turkish)
+        )
+        val languageCodes = arrayOf("", "en", "tr")
+        
+        val currentLanguage = LocaleHelper.getLanguage(this)
+        val currentIndex = languageCodes.indexOf(currentLanguage).coerceAtLeast(0)
+        
+        AlertDialog.Builder(this)
+            .setTitle(R.string.pref_language_title)
+            .setSingleChoiceItems(languages, currentIndex) { dialog, which ->
+                val selectedLanguage = languageCodes[which]
+                if (selectedLanguage != currentLanguage) {
+                    LocaleHelper.setNewLocale(this, selectedLanguage)
+                    PrefsUtil.ensurePrefsAccessible(this)
+                    // Restart app to apply language change
+                    scheduleRestartSelf()
+                }
+                dialog.dismiss()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     private fun selectTab(main: Boolean) {

@@ -6,7 +6,7 @@ import android.os.Bundle
 import androidx.preference.PreferenceFragmentCompat
 import java.io.File
 
-class SettingsFragment : PreferenceFragmentCompat(), SharedPreferences.OnSharedPreferenceChangeListener {
+class SettingsFragment : BasePreferenceFragment(), SharedPreferences.OnSharedPreferenceChangeListener {
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         preferenceManager.sharedPreferencesMode = Context.MODE_WORLD_READABLE
         preferenceManager.sharedPreferencesName = "${requireContext().packageName}_preferences"
