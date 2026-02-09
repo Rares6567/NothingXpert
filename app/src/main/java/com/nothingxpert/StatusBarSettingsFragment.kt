@@ -9,7 +9,10 @@ class StatusBarSettingsFragment : BasePreferenceFragment() {
     private val prefListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
         // Delay to allow async apply() to write file, then fix permissions
         android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-            if (isAdded) PreferenceUtils.fixPermissions(requireContext())
+            if (isAdded) {
+                PrefsUtil.ensurePrefsAccessible(requireContext())
+                PreferenceUtils.fixPermissions(requireContext())
+            }
         }, 100)
     }
 
@@ -18,14 +21,14 @@ class StatusBarSettingsFragment : BasePreferenceFragment() {
         preferenceManager.sharedPreferencesMode = Context.MODE_WORLD_READABLE
         setPreferencesFromResource(R.xml.preferences_status_bar, rootKey)
         PreferenceUtils.fixPermissions(requireContext())
-        PrefsUtil.makeWorldReadable(requireContext())
+        PrefsUtil.ensurePrefsAccessible(requireContext())
     }
 
     override fun onResume() {
         super.onResume()
         preferenceManager.sharedPreferences?.registerOnSharedPreferenceChangeListener(prefListener)
         PreferenceUtils.fixPermissions(requireContext())
-        PrefsUtil.makeWorldReadable(requireContext())
+        PrefsUtil.ensurePrefsAccessible(requireContext())
     }
 
     override fun onPause() {

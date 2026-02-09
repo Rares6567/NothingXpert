@@ -58,6 +58,9 @@
     <string name="pref_category_gestures">Hareketler</string>
     <string name="pref_status_bar_double_tap_title">Çift dokunuşla uyku</string>
     <string name="pref_status_bar_double_tap_summary">Durum çubuğuna çift dokunarak ekranı kapat</string>
+    <string name="pref_category_notifications">Bildirimler</string>
+    <string name="pref_unobtrusive_notifs_screen_on_title">Ekran açıkken sessiz bildirim</string>
+    <string name="pref_unobtrusive_notifs_screen_on_summary">Ekran açık ve kilitli değilken bildirim sesi ve titreşimini kapat</string>
 
     <string name="app_lock_button">Uygulama Kilidi</string>
 

@@ -58,6 +58,9 @@
     <string name="pref_category_gestures">Gestures</string>
     <string name="pref_status_bar_double_tap_title">Double tap to sleep</string>
     <string name="pref_status_bar_double_tap_summary">Turn screen off by double tapping the status bar</string>
+    <string name="pref_category_notifications">Notifications</string>
+    <string name="pref_unobtrusive_notifs_screen_on_title">Unobtrusive notifications (screen on)</string>
+    <string name="pref_unobtrusive_notifs_screen_on_summary">Silence notification sound and vibration while the screen is on and unlocked</string>
 
     <string name="app_lock_button">App Lock</string>
 
