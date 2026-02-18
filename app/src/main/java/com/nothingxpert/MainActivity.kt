@@ -35,6 +35,7 @@ import java.io.DataOutputStream
 import com.nothingxpert.util.RootShell
 import kotlin.system.exitProcess
 import androidx.appcompat.app.AlertDialog
+import com.nothingxpert.ui.GlitchEffect
 
 class MainActivity : AppCompatActivity() {
 
@@ -180,6 +181,9 @@ class MainActivity : AppCompatActivity() {
             .setDuration(500)
             .setStartDelay(50)
             .setInterpolator(android.view.animation.DecelerateInterpolator())
+            .withEndAction {
+                GlitchEffect.apply(titleNothing, 800)
+            }
             .start()
         
         // Animate "Xpert" fading up
