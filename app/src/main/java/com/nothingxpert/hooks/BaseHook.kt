@@ -147,16 +147,14 @@ abstract class BaseHook {
         }
         
         fun clearCache(key: String? = null) {
-            synchronized(prefCache) {
-                if (key != null) {
-                    prefCache.remove(key)
-                    stringPrefCache.remove(key)
-                    stringSetPrefCache.remove(key)
-                } else {
-                    prefCache.clear()
-                    stringPrefCache.clear()
-                    stringSetPrefCache.clear()
-                }
+            if (key != null) {
+                synchronized(prefCache) { prefCache.remove(key) }
+                synchronized(stringPrefCache) { stringPrefCache.remove(key) }
+                synchronized(stringSetPrefCache) { stringSetPrefCache.remove(key) }
+            } else {
+                synchronized(prefCache) { prefCache.clear() }
+                synchronized(stringPrefCache) { stringPrefCache.clear() }
+                synchronized(stringSetPrefCache) { stringSetPrefCache.clear() }
             }
         }
         
