@@ -442,10 +442,51 @@ class MainActivity : AppCompatActivity() {
         gpuValue = findViewById(R.id.gpu_value)
         sectionMain = findViewById(R.id.section_main)
         sectionOptions = findViewById(R.id.section_options)
-        
+
         // Initial static update (no loop)
         updateRamUsage()
         updateGpuUsage()
+        initCpuUsage() // Initialize CPU reading in background
+    }
+
+    /**
+     * Start CPU reading immediately in background so we have a value ready
+     * when the update cycle begins
+     */
+    private fun initCpuUsage() {
+        // Show loading state immediately
+        cpuValue.text = getString(R.string.cpu_monitor_format, "--", "--°C")
+
+        // Start background reading for initial value
+        Thread {
+            val firstLine = readCpuStatLine()
+            val firstSample = if (firstLine != null) parseCpuTotals(firstLine) else null
+
+            if (firstSample != null) {
+                // Wait for second sample
+                try { Thread.sleep(500) } catch (_: InterruptedException) {}
+
+                val secondLine = readCpuStatLine()
+                val secondSample = if (secondLine != null) parseCpuTotals(secondLine) else null
+
+                if (secondSample != null) {
+                    val totalDiff = secondSample.first - firstSample.first
+                    val idleDiff = secondSample.second - firstSample.second
+                    if (totalDiff > 0 && idleDiff >= 0) {
+                        val busy = (totalDiff - idleDiff).toDouble()
+                        val pct = ((busy / totalDiff.toDouble()) * 100.0).toInt().coerceIn(0, 100)
+                        lastCpuUsage = pct
+
+                        // Get temperature and update UI
+                        val temp = readCpuTempExact()
+                        val tempStr = temp?.let { "${it}°C" } ?: "--°C"
+                        runOnUiThread {
+                            cpuValue.text = getString(R.string.cpu_monitor_format, pct, tempStr)
+                        }
+                    }
+                }
+            }
+        }.start()
     }
     
     override fun onResume() {
