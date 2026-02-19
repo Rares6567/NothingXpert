@@ -59,18 +59,29 @@ class SystemHooks : BaseHook() {
             cpuReporterStarted = true
             log("starting CPU reporter")
             val cpuHandler = Handler(Looper.getMainLooper())
+            val backgroundExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { r ->
+                Thread(r, "NothingXpert-CpuMonitor").apply { isDaemon = true }
+            }
             val runnable = object : Runnable {
                 override fun run() {
-                    try {
-                        val usage = sampleCpuUsage()
-                        if (usage != null) {
-                            android.provider.Settings.Global.putString(sysContext.contentResolver, "nothingxpert_cpu_usage", usage.toString())
-                        }
-                        val temp = readCpuTemp()
-                        if (temp != null) {
-                            android.provider.Settings.Global.putString(sysContext.contentResolver, "nothingxpert_cpu_temp", temp.toString())
-                        }
-                    } catch (_: Throwable) { }
+                    // Do file I/O on background thread
+                    backgroundExecutor.execute {
+                        try {
+                            val usage = sampleCpuUsage()
+                            val temp = readCpuTemp()
+                            // Post results back to main thread
+                            cpuHandler.post {
+                                try {
+                                    if (usage != null) {
+                                        android.provider.Settings.Global.putString(sysContext.contentResolver, "nothingxpert_cpu_usage", usage.toString())
+                                    }
+                                    if (temp != null) {
+                                        android.provider.Settings.Global.putString(sysContext.contentResolver, "nothingxpert_cpu_temp", temp.toString())
+                                    }
+                                } catch (_: Throwable) { }
+                            }
+                        } catch (_: Throwable) { }
+                    }
                     cpuHandler.postDelayed(this, 2000)
                 }
             }
