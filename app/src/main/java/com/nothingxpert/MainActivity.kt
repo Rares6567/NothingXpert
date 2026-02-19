@@ -454,8 +454,8 @@ class MainActivity : AppCompatActivity() {
      * when the update cycle begins
      */
     private fun initCpuUsage() {
-        // Show loading state immediately
-        cpuValue.text = getString(R.string.cpu_monitor_format, "--", "--°C")
+        // Show loading state immediately (use 0 as placeholder for the %d format)
+        cpuValue.text = getString(R.string.cpu_monitor_format, 0, "--°C")
 
         // Start background reading for initial value
         Thread {
