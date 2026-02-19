@@ -872,12 +872,31 @@ class FloatingWindowHooks : BaseHook() {
         try {
             stopStatsUpdater()
             floatingView?.let { view ->
-                windowManager?.removeView(view)
+                try {
+                    windowManager?.removeView(view)
+                } catch (_: Throwable) {
+                    // View may already be removed
+                }
+                // Clear all view references to prevent memory leaks
+                floatingView = null
+                cpuTextView = null
+                gpuTextView = null
+                ramTextView = null
+                tempTextView = null
+                detailTextView1 = null
+                detailTextView2 = null
+                detailTextView3 = null
+                detailTextView4 = null
+                detailTextView5 = null
+                detailTextView6 = null
+                detailTextView7 = null
+                detailTextView8 = null
             }
-            floatingView = null
             floatingViewCreated = false
             unregisterScreenReceiver()
             updaterInstance = null
+            windowManager = null
+            windowLayoutParams = null
         } catch (_: Throwable) {}
     }
     
@@ -925,11 +944,32 @@ class FloatingWindowHooks : BaseHook() {
             if (floatingViewCreated) {
                 try {
                     updaterInstance?.stopStatsUpdater()
-                    floatingView?.let { windowManager?.removeView(it) }
+                    floatingView?.let { view ->
+                        try {
+                            windowManager?.removeView(view)
+                        } catch (_: Throwable) {
+                            // View may already be removed
+                        }
+                    }
+                    // Clear all view references to prevent memory leaks
                     floatingView = null
+                    cpuTextView = null
+                    gpuTextView = null
+                    ramTextView = null
+                    tempTextView = null
+                    detailTextView1 = null
+                    detailTextView2 = null
+                    detailTextView3 = null
+                    detailTextView4 = null
+                    detailTextView5 = null
+                    detailTextView6 = null
+                    detailTextView7 = null
+                    detailTextView8 = null
                     floatingViewCreated = false
                     unregisterScreenReceiver()
                     updaterInstance = null
+                    windowManager = null
+                    windowLayoutParams = null
                 } catch (_: Throwable) {}
             }
         }
