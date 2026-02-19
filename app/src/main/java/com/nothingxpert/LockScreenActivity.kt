@@ -75,7 +75,7 @@ class LockScreenActivity : Activity() {
                 }
             }
             try {
-                biometricPrompt.authenticate(CancellationSignal(), mainExecutor, callback)
+                biometricPrompt.authenticate(CancellationSignal(), executor, callback)
             } catch (e: Exception) {
                 e.printStackTrace()
                 finish()
