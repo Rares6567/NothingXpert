@@ -104,6 +104,7 @@ class LockScreenActivity : Activity() {
         // The hook needs to listen for activity resume/result.
     }
     
+    @Suppress("DEPRECATION")
     override fun onBackPressed() {
         // Block back; just finish this task
         finish()
