@@ -12,10 +12,6 @@ import com.google.android.material.appbar.MaterialToolbar
 
 class AppsActivity : BaseActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-        val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
-        if (prefs.getBoolean("pref_amoled_theme", false)) {
-            setTheme(R.style.Theme_NothingXpert_Amoled)
-        }
         super.onCreate(savedInstanceState)
 
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -50,7 +46,7 @@ class AppsActivity : BaseActivity() {
 
         row.setOnClickListener {
             startActivity(Intent(this, AppLockSettingsActivity::class.java))
-            overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
+            applyBackAnimation()
         }
 
         // Configure Undismissable Notifications row
@@ -70,19 +66,19 @@ class AppsActivity : BaseActivity() {
 
         notifRow.setOnClickListener {
             startActivity(Intent(this, UndismissableNotifsSettingsActivity::class.java))
-            overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
+            applyBackAnimation()
         }
     }
 
     override fun onSupportNavigateUp(): Boolean {
         finish()
-        overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right)
+        applyForwardAnimation()
         return true
     }
 
     @Suppress("DEPRECATION")
     override fun onBackPressed() {
         super.onBackPressed()
-        overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right)
+        applyForwardAnimation()
     }
 }

@@ -37,10 +37,13 @@ import kotlin.system.exitProcess
 import androidx.appcompat.app.AlertDialog
 import com.nothingxpert.ui.GlitchEffect
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : BaseActivity() {
 
-    override fun attachBaseContext(newBase: Context) {
-        super.attachBaseContext(LocaleHelper.setLocale(newBase))
+    companion object {
+        private const val UPDATE_INTERVAL_MS = 1000L
+        private const val MONITOR_START_DELAY_MS = 2000L
+        private const val CPU_SAMPLE_DELAY_MS = 500L
+        private const val CPU_LOG_TAG = "NothingXpertCPU"
     }
 
     private val ramHandler = Handler(Looper.getMainLooper())
@@ -53,7 +56,7 @@ class MainActivity : AppCompatActivity() {
                 updateRamUsage()
                 triggerCpuUpdate()
                 updateGpuUsage()
-                ramHandler.postDelayed(this, 1000)
+                ramHandler.postDelayed(this, UPDATE_INTERVAL_MS)
             }
         }
     }
@@ -73,20 +76,15 @@ class MainActivity : AppCompatActivity() {
     private var lastCpuTotal: Long = -1
     @Volatile private var lastCpuUsage: Int = -1
     private var cpuFirstSample: Pair<Long, Long>? = null
+    @Volatile private var cpuInitThread: Thread? = null
 
     private lateinit var gestureDetector: android.view.GestureDetector
     private var isMainTabSelected = true
     @Volatile private var restarting = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Apply AMOLED theme if enabled
-        val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
-        if (prefs.getBoolean("pref_amoled_theme", false)) {
-            setTheme(R.style.Theme_NothingXpert_Amoled)
-        }
-
         super.onCreate(savedInstanceState)
-        
+
         // Enable edge-to-edge display
         WindowCompat.setDecorFitsSystemWindows(window, false)
         
@@ -170,6 +168,14 @@ class MainActivity : AppCompatActivity() {
         mainHandler.removeCallbacksAndMessages(null)
         cpuUpdateHandler.removeCallbacksAndMessages(null)
         gateRunnable?.let { ramHandler.removeCallbacks(it) }
+
+        // Interrupt and clean up CPU init thread if still running
+        cpuInitThread?.let {
+            if (it.isAlive) {
+                it.interrupt()
+            }
+        }
+        cpuInitThread = null
     }
 
     private fun animateTitleOnStartup() {
@@ -354,7 +360,7 @@ class MainActivity : AppCompatActivity() {
         // Click listener to open settings with animation
         categoryView.setOnClickListener {
             startActivity(Intent(this, SettingsActivity::class.java))
-            overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
+            applyBackAnimation()
         }
     }
 
@@ -381,7 +387,7 @@ class MainActivity : AppCompatActivity() {
         // Click listener to open misc settings with animation
         categoryView.setOnClickListener {
             startActivity(Intent(this, MiscSettingsActivity::class.java))
-            overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
+            applyBackAnimation()
         }
     }
 
@@ -408,7 +414,7 @@ class MainActivity : AppCompatActivity() {
         // Click listener to open status bar settings
         categoryView.setOnClickListener {
             startActivity(Intent(this, StatusBarSettingsActivity::class.java))
-            overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
+            applyBackAnimation()
         }
     }
 
@@ -462,35 +468,46 @@ class MainActivity : AppCompatActivity() {
         cpuValue.text = getString(R.string.cpu_monitor_format, 0, "--°C")
 
         // Start background reading for initial value
-        Thread {
-            val firstLine = readCpuStatLine()
-            val firstSample = if (firstLine != null) parseCpuTotals(firstLine) else null
+        val thread = Thread {
+            try {
+                val firstLine = readCpuStatLine()
+                val firstSample = if (firstLine != null) parseCpuTotals(firstLine) else null
 
-            if (firstSample != null) {
-                // Wait for second sample
-                try { Thread.sleep(500) } catch (_: InterruptedException) {}
+                if (firstSample != null) {
+                    // Wait for second sample
+                    try { Thread.sleep(CPU_SAMPLE_DELAY_MS) } catch (_: InterruptedException) { return@Thread }
 
-                val secondLine = readCpuStatLine()
-                val secondSample = if (secondLine != null) parseCpuTotals(secondLine) else null
+                    // Check if we're still alive and not destroyed
+                    if (isDestroyed) return@Thread
 
-                if (secondSample != null) {
-                    val totalDiff = secondSample.first - firstSample.first
-                    val idleDiff = secondSample.second - firstSample.second
-                    if (totalDiff > 0 && idleDiff >= 0) {
-                        val busy = (totalDiff - idleDiff).toDouble()
-                        val pct = ((busy / totalDiff.toDouble()) * 100.0).toInt().coerceIn(0, 100)
-                        lastCpuUsage = pct
+                    val secondLine = readCpuStatLine()
+                    val secondSample = if (secondLine != null) parseCpuTotals(secondLine) else null
 
-                        // Get temperature and update UI
-                        val temp = readCpuTempExact()
-                        val tempStr = temp?.let { "${it}°C" } ?: "--°C"
-                        runOnUiThread {
-                            cpuValue.text = getString(R.string.cpu_monitor_format, pct, tempStr)
+                    if (secondSample != null) {
+                        val totalDiff = secondSample.first - firstSample.first
+                        val idleDiff = secondSample.second - firstSample.second
+                        if (totalDiff > 0 && idleDiff >= 0) {
+                            val busy = (totalDiff - idleDiff).toDouble()
+                            val pct = ((busy / totalDiff.toDouble()) * 100.0).toInt().coerceIn(0, 100)
+                            lastCpuUsage = pct
+
+                            // Get temperature and update UI
+                            val temp = readCpuTempExact()
+                            val tempStr = temp?.let { "${it}°C" } ?: "--°C"
+                            runOnUiThread {
+                                if (!isDestroyed) {
+                                    cpuValue.text = getString(R.string.cpu_monitor_format, pct, tempStr)
+                                }
+                            }
                         }
                     }
                 }
+            } finally {
+                cpuInitThread = null
             }
-        }.start()
+        }
+        cpuInitThread = thread
+        thread.start()
     }
     
     override fun onResume() {
@@ -514,7 +531,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
         gateRunnable = gate
-        ramHandler.postDelayed(gate, 2000) // begin updates only after 2s on main
+        ramHandler.postDelayed(gate, MONITOR_START_DELAY_MS)
     }
 
     private fun stopResourceMonitor() {
@@ -739,7 +756,7 @@ class MainActivity : AppCompatActivity() {
             val tempStr = temp?.let { "${it}°C" } ?: "--°C"
             val shownUsage = if (usage >= 0) usage else 0
             cpuValue.text = getString(R.string.cpu_monitor_format, shownUsage, tempStr)
-        }, 500) // 500ms delay for second sample
+        }, CPU_SAMPLE_DELAY_MS)
     }
 
     private fun parseCpuTotals(statContent: String?): Pair<Long, Long>? {
@@ -992,12 +1009,6 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
-    }
-
-    companion object {
-        private const val CPU_LOG_TAG = "NothingXpertCPU"
-        @Volatile
-        private var lastCpuUsage: Int = -1
     }
 
     private fun formatBytes(bytes: Long): String {

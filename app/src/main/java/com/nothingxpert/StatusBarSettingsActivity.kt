@@ -11,16 +11,11 @@ import com.google.android.material.appbar.MaterialToolbar
 
 class StatusBarSettingsActivity : BaseActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Apply AMOLED theme if enabled
-        val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
-        if (prefs.getBoolean("pref_amoled_theme", false)) {
-            setTheme(R.style.Theme_NothingXpert_Amoled)
-        }
         super.onCreate(savedInstanceState)
-        
+
         // Enable edge-to-edge display
         WindowCompat.setDecorFitsSystemWindows(window, false)
-        
+
         setContentView(R.layout.activity_settings) // Reuse settings layout
 
         // Handle status bar insets
@@ -46,13 +41,13 @@ class StatusBarSettingsActivity : BaseActivity() {
 
     override fun onSupportNavigateUp(): Boolean {
         finish()
-        overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right)
+        applyForwardAnimation()
         return true
     }
 
     @Suppress("DEPRECATION")
     override fun onBackPressed() {
         super.onBackPressed()
-        overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right)
+        applyForwardAnimation()
     }
 }
