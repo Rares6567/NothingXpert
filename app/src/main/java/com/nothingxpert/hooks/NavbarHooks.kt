@@ -128,43 +128,104 @@ class NavbarHooks : BaseHook() {
     
     private fun installHideImeBarHook(lpparam: XC_LoadPackage.LoadPackageParam) {
         safeHook("InputMethodService.onWindowShown") {
-            val imsClass = XposedHelpers.findClass(
-                "android.inputmethodservice.InputMethodService",
-                lpparam.classLoader
+            // Try to hook the actual GBoard implementation classes
+            // GBoard hierarchy: LatinIME -> dyh -> moa -> InputMethodService
+            val gboardClasses = listOf(
+                "com.android.inputmethod.latin.LatinIME",
+                "dyh",  // Obfuscated parent
+                "moa",  // Obfuscated parent that extends InputMethodService
+                "android.inputmethodservice.InputMethodService"
             )
-            XposedHelpers.findAndHookMethod(
-                imsClass,
-                "onWindowShown",
-                object : XC_MethodHook() {
-                    override fun afterHookedMethod(param: MethodHookParam) {
-                        if (!isHideImeBarEnabled()) return
-                        val ims = param.thisObject
-                        handler.post { hideImeSwitcher(ims) }
+
+            var hooked = false
+            for (className in gboardClasses) {
+                try {
+                    val imsClass = XposedHelpers.findClass(className, lpparam.classLoader)
+
+                    // Hook onWindowShown
+                    XposedHelpers.findAndHookMethod(
+                        imsClass,
+                        "onWindowShown",
+                        object : XC_MethodHook() {
+                            override fun afterHookedMethod(param: MethodHookParam) {
+                                if (!isHideImeBarEnabled()) return
+                                log("onWindowShown called, class: ${param.thisObject.javaClass.name}")
+                                val ims = param.thisObject
+                                handler.post { hideImeSwitcher(ims) }
+                            }
+                        }
+                    )
+
+                    // Hook onStartInputView
+                    XposedHelpers.findAndHookMethod(
+                        imsClass,
+                        "onStartInputView",
+                        EditorInfo::class.java,
+                        Boolean::class.javaPrimitiveType,
+                        object : XC_MethodHook() {
+                            override fun afterHookedMethod(param: MethodHookParam) {
+                                if (!isHideImeBarEnabled()) return
+                                log("onStartInputView called, class: ${param.thisObject.javaClass.name}")
+                                val ims = param.thisObject
+                                handler.post { hideImeSwitcher(ims) }
+                            }
+                        }
+                    )
+
+                    // Hook onComputeInsets to zero out the bottom insets
+                    try {
+                        XposedHelpers.findAndHookMethod(
+                            imsClass,
+                            "onComputeInsets",
+                            object : XC_MethodHook() {
+                                override fun afterHookedMethod(param: MethodHookParam) {
+                                    if (!isHideImeBarEnabled()) return
+                                    try {
+                                        val insets = param.args[0]
+                                        // Set contentTopInsets to visibleTopInsets to remove the bottom gap
+                                        XposedHelpers.setIntField(insets, "contentTopInsets",
+                                            XposedHelpers.getIntField(insets, "visibleTopInsets"))
+                                        XposedHelpers.setIntField(insets, "touchableInsets", 0) // INSETS_TOUCHABLE_INNER
+                                        log("Adjusted onComputeInsets")
+                                    } catch (t: Throwable) {
+                                        log("Failed to adjust insets: $t")
+                                    }
+                                }
+                            }
+                        )
+                    } catch (t: Throwable) {
+                        log("onComputeInsets hook failed (may not exist in this class): ${t.message}")
                     }
+
+                    log("IME bar hider hooked into $className")
+                    hooked = true
+                    break  // Successfully hooked, no need to try other classes
+                } catch (t: Throwable) {
+                    log("Failed to hook $className: ${t.message}")
                 }
-            )
-            XposedHelpers.findAndHookMethod(
-                imsClass,
-                "onStartInputView",
-                EditorInfo::class.java,
-                Boolean::class.javaPrimitiveType,
-                object : XC_MethodHook() {
-                    override fun afterHookedMethod(param: MethodHookParam) {
-                        if (!isHideImeBarEnabled()) return
-                        val ims = param.thisObject
-                        handler.post { hideImeSwitcher(ims) }
-                    }
-                }
-            )
-            log("IME bar hider installed")
+            }
+
+            if (!hooked) {
+                log("Failed to hook any InputMethodService class!")
+            } else {
+                log("IME bar hider installed successfully")
+            }
         }
     }
     
     private fun hideImeSwitcher(ims: Any) {
         try {
-            val dialog = XposedHelpers.callMethod(ims, "getWindow") as? android.app.Dialog ?: return
-            val window = dialog.window ?: return
+            log("hideImeSwitcher called for: ${ims.javaClass.name}")
+            val dialog = XposedHelpers.callMethod(ims, "getWindow") as? android.app.Dialog ?: run {
+                log("getWindow returned null or not a Dialog")
+                return
+            }
+            val window = dialog.window ?: run {
+                log("dialog.window returned null")
+                return
+            }
             val decor = window.decorView
+            log("decorView: ${decor?.javaClass?.name}, hasWindow: ${window != null}")
             val ids = listOf("input_method_nav_bar", "input_method_nav_back", "input_method_nav_ime_switcher")
             var hiddenAny = false
             for (name in ids) {
