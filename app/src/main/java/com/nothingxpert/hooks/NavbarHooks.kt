@@ -62,20 +62,14 @@ class NavbarHooks : BaseHook() {
     
     private fun installHideNavbarHook(lpparam: XC_LoadPackage.LoadPackageParam) {
         if (!ENABLE_HIDE_NAVBAR) return
-        
-        val navBarViewClass = try {
-            XposedHelpers.findClass("com.android.systemui.navigationbar.views.NavigationBarView", lpparam.classLoader)
-        } catch (_: Throwable) {
-            try {
-                XposedHelpers.findClass("com.android.systemui.navigationbar.NavigationBarView", lpparam.classLoader)
-            } catch (_: Throwable) {
-                try {
-                    XposedHelpers.findClass("com.android.systemui.statusbar.phone.NavigationBarView", lpparam.classLoader)
-                } catch (t: Throwable) {
-                    log("Could not find NavigationBarView class: $t")
-                    return
-                }
-            }
+
+        // Try to find NavigationBarView class across different Android versions
+        val navBarViewClass = NAV_BAR_VIEW_CLASSES.firstNotNullOfOrNull { className ->
+            try { XposedHelpers.findClass(className, lpparam.classLoader) }
+            catch (_: Throwable) { null }
+        } ?: run {
+            log("Could not find NavigationBarView class")
+            return
         }
         
         safeHook("NavigationBarView.updateNavButtonIcons") {
@@ -129,16 +123,9 @@ class NavbarHooks : BaseHook() {
     private fun installHideImeBarHook(lpparam: XC_LoadPackage.LoadPackageParam) {
         safeHook("InputMethodService.onWindowShown") {
             // Try to hook the actual GBoard implementation classes
-            // GBoard hierarchy: LatinIME -> dyh -> moa -> InputMethodService
-            val gboardClasses = listOf(
-                "com.android.inputmethod.latin.LatinIME",
-                "dyh",  // Obfuscated parent
-                "moa",  // Obfuscated parent that extends InputMethodService
-                "android.inputmethodservice.InputMethodService"
-            )
 
             var hooked = false
-            for (className in gboardClasses) {
+            for (className in GBOARD_INPUT_CLASSES) {
                 try {
                     val imsClass = XposedHelpers.findClass(className, lpparam.classLoader)
 
@@ -420,11 +407,26 @@ class NavbarHooks : BaseHook() {
     private fun isHideImeBarEnabled() = getPreferenceBoolean(PREF_HIDE_IME_BAR, false)
     
     companion object {
+        // Class names for finding NavigationBarView across different Android versions
+        private val NAV_BAR_VIEW_CLASSES = listOf(
+            "com.android.systemui.navigationbar.views.NavigationBarView",
+            "com.android.systemui.navigationbar.NavigationBarView",
+            "com.android.systemui.statusbar.phone.NavigationBarView"
+        )
+
+        // Class names for GBoard InputMethodService hierarchy
+        private val GBOARD_INPUT_CLASSES = listOf(
+            "com.android.inputmethod.latin.LatinIME",
+            "dyh",  // Obfuscated parent
+            "moa",  // Obfuscated parent that extends InputMethodService
+            "android.inputmethodservice.InputMethodService"
+        )
+
         private const val GBOARD_PKG = "com.google.android.inputmethod.latin"
         private const val PREF_HIDE_IME_BAR = "pref_hide_ime_bar"
         private const val ACTION_IME_BAR_TOGGLED = "com.nothingxpert.action.IME_BAR_TOGGLED"
         const val ENABLE_HIDE_NAVBAR = true
-        
+
         @Volatile var imeReceiverRegistered = false
     }
 }
