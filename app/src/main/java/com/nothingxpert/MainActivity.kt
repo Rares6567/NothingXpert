@@ -45,12 +45,13 @@ class MainActivity : AppCompatActivity() {
 
     private val ramHandler = Handler(Looper.getMainLooper())
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val cpuUpdateHandler = Handler(Looper.getMainLooper())
     private val ramUpdateRunnable = object : Runnable {
         override fun run() {
             // Update only while main tab stays visible
             if (isMainTabSelected && lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) {
                 updateRamUsage()
-                updateCpuUsage()
+                triggerCpuUpdate()
                 updateGpuUsage()
                 ramHandler.postDelayed(this, 1000)
             }
@@ -67,8 +68,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var sectionOptions: View
     private lateinit var languageValue: TextView
 
-    private var lastCpuIdle: Long = 0
-    private var lastCpuTotal: Long = 0
+    // CPU two-sample tracking
+    private var lastCpuIdle: Long = -1
+    private var lastCpuTotal: Long = -1
+    @Volatile private var lastCpuUsage: Int = -1
+    private var cpuFirstSample: Pair<Long, Long>? = null
 
     private lateinit var gestureDetector: android.view.GestureDetector
     private var isMainTabSelected = true
@@ -649,43 +653,48 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
-    private fun updateCpuUsage(force: Boolean = false) {
-        // Local two-sample diff off the main thread to avoid UI lag.
-        Thread {
-            val usage = computeCpuUsageTwoSample()
-            val temp = readCpuTempExact()
-            runOnUiThread {
-                val tempStr = when {
-                    temp != null -> "${temp}°C"
-                    else -> "--°C"
-                }
-                val shownUsage = when {
-                    usage != null -> usage
-                    lastCpuUsage >= 0 -> lastCpuUsage
-                    else -> 0
-                }
-                cpuValue.text = getString(R.string.cpu_monitor_format, shownUsage, tempStr)
-            }
-        }.start()
-    }
+    /**
+     * Trigger CPU update by reading first sample, then scheduling second sample
+     * This syncs CPU updates with the 1-second update cycle
+     */
+    private fun triggerCpuUpdate() {
+        // Read first sample immediately
+        val firstLine = readCpuStatLine()
+        val firstSample = if (firstLine != null) parseCpuTotals(firstLine) else null
 
-    private fun computeCpuUsageTwoSample(): Int? {
-        val firstLine = readCpuStatLine() ?: return null.also { Log.w(CPU_LOG_TAG, "readCpuStatLine first null") }
-        val first = parseCpuTotals(firstLine) ?: return null.also { Log.w(CPU_LOG_TAG, "parse first null line=$firstLine") }
-        try {
-            Thread.sleep(800) // larger window for a clearer delta
-        } catch (_: InterruptedException) {
+        if (firstSample == null) {
+            // Fall back to last known value
+            val tempStr = readCpuTempExact()?.let { "${it}°C" } ?: "--°C"
+            val shownUsage = if (lastCpuUsage >= 0) lastCpuUsage else 0
+            cpuValue.text = getString(R.string.cpu_monitor_format, shownUsage, tempStr)
+            return
         }
-        val secondLine = readCpuStatLine() ?: return null.also { Log.w(CPU_LOG_TAG, "readCpuStatLine second null") }
-        val second = parseCpuTotals(secondLine) ?: return null.also { Log.w(CPU_LOG_TAG, "parse second null line=$secondLine") }
-        val totalDiff = second.first - first.first
-        val idleDiff = second.second - first.second
-        if (totalDiff <= 0 || idleDiff < 0) return null
-        val busy = (totalDiff - idleDiff).toDouble()
-        val pct = ((busy / totalDiff.toDouble()) * 100.0).toInt().coerceIn(0, 100)
-        Log.d(CPU_LOG_TAG, "cpu usage totalDiff=$totalDiff idleDiff=$idleDiff pct=$pct first='$firstLine' second='$secondLine'")
-        lastCpuUsage = pct
-        return pct
+
+        // Schedule second sample after a delay (within the 1-second cycle)
+        cpuUpdateHandler.postDelayed({
+            val secondLine = readCpuStatLine()
+            val secondSample = if (secondLine != null) parseCpuTotals(secondLine) else null
+
+            val usage = if (secondSample != null) {
+                val totalDiff = secondSample.first - firstSample.first
+                val idleDiff = secondSample.second - firstSample.second
+                if (totalDiff > 0 && idleDiff >= 0) {
+                    val busy = (totalDiff - idleDiff).toDouble()
+                    val pct = ((busy / totalDiff.toDouble()) * 100.0).toInt().coerceIn(0, 100)
+                    lastCpuUsage = pct
+                    pct
+                } else {
+                    lastCpuUsage
+                }
+            } else {
+                lastCpuUsage
+            }
+
+            val temp = readCpuTempExact()
+            val tempStr = temp?.let { "${it}°C" } ?: "--°C"
+            val shownUsage = if (usage >= 0) usage else 0
+            cpuValue.text = getString(R.string.cpu_monitor_format, shownUsage, tempStr)
+        }, 500) // 500ms delay for second sample
     }
 
     private fun parseCpuTotals(statContent: String?): Pair<Long, Long>? {
