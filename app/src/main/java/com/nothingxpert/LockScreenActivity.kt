@@ -7,6 +7,7 @@ import android.hardware.biometrics.BiometricPrompt
 import android.os.CancellationSignal
 import android.view.View
 import android.widget.TextView
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
 class LockScreenActivity : Activity() {
@@ -17,6 +18,7 @@ class LockScreenActivity : Activity() {
     }
 
     private lateinit var targetPackage: String
+    private lateinit var executor: ExecutorService
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -34,7 +36,7 @@ class LockScreenActivity : Activity() {
         textView.textSize = 24f
         textView.gravity = android.view.Gravity.CENTER
         addContentView(textView, android.view.ViewGroup.LayoutParams(
-            android.view.ViewGroup.LayoutParams.MATCH_PARENT, 
+            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
             android.view.ViewGroup.LayoutParams.MATCH_PARENT
         ))
 
@@ -45,15 +47,22 @@ class LockScreenActivity : Activity() {
         }
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        if (::executor.isInitialized) {
+            executor.shutdownNow()
+        }
+    }
+
     private fun authenticate() {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
-            val executor = Executors.newSingleThreadExecutor()
+            executor = Executors.newSingleThreadExecutor()
             val biometricPrompt = BiometricPrompt.Builder(this)
                 .setTitle(getString(R.string.biometric_unlock_title))
                 .setSubtitle(getString(R.string.biometric_unlock_subtitle))
                 .setAllowedAuthenticators(android.hardware.biometrics.BiometricManager.Authenticators.BIOMETRIC_STRONG or android.hardware.biometrics.BiometricManager.Authenticators.DEVICE_CREDENTIAL)
                 .build()
-                
+
             val callback = object : BiometricPrompt.AuthenticationCallback() {
                 override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult?) {
                     super.onAuthenticationSucceeded(result)
@@ -91,19 +100,19 @@ class LockScreenActivity : Activity() {
         val intent = Intent(ACTION_UNLOCK)
         intent.putExtra(EXTRA_PACKAGE_NAME, targetPackage)
         intent.setPackage(targetPackage) // Only send to the locked app
-        sendBroadcast(intent)
+        sendBroadcast(intent, "com.nothingxpert.permission.APP_LOCK")
     }
 
     private fun killTargetApp() {
         // We can't easily kill the other app from here without permissions.
-        // Instead, we rely on the hook waiting for our broadcast. 
+        // Instead, we rely on the hook waiting for our broadcast.
         // If we finish without broadcasting success, the hook should kill the activity.
         // But the hook doesn't know we finished.
         // So we send a LOCK broadcast? Or just do nothing and let the user remain locked?
         // Actually, if we finish, the user sees the original app (which is covered by black overlay in hook).
         // The hook needs to listen for activity resume/result.
     }
-    
+
     @Suppress("DEPRECATION")
     override fun onBackPressed() {
         // Block back; just finish this task

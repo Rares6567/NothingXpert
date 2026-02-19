@@ -5,6 +5,11 @@
     <uses-permission android:name="android.permission.USE_FINGERPRINT" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
+    <!-- Signature-level permission for secure app-lock broadcasts -->
+    <permission
+        android:name="com.nothingxpert.permission.APP_LOCK"
+        android:protectionLevel="signature" />
+
     <!-- Allow listing launcher apps for App Lock picker -->
     <queries>
         <intent>
@@ -84,6 +89,7 @@
         <activity
             android:name=".LockScreenActivity"
             android:exported="true"
+            android:permission="com.nothingxpert.permission.APP_LOCK"
             android:theme="@style/Theme.AppCompat.NoActionBar"
             android:excludeFromRecents="true"
             android:noHistory="true"

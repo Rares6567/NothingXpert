@@ -64,6 +64,10 @@ class SystemHooks : BaseHook() {
             }
             val runnable = object : Runnable {
                 override fun run() {
+                    if (!cpuReporterStarted) {
+                        // Stop if reporter was stopped
+                        return
+                    }
                     // Do file I/O on background thread
                     backgroundExecutor.execute {
                         try {
@@ -85,6 +89,10 @@ class SystemHooks : BaseHook() {
                     cpuHandler.postDelayed(this, 2000)
                 }
             }
+            // Store for cleanup
+            cpuReporterHandler = cpuHandler
+            cpuReporterRunnable = runnable
+            cpuReporterExecutor = backgroundExecutor
             cpuHandler.post(runnable)
         } catch (t: Throwable) {
             log("CPU reporter init failed: $t")
@@ -238,6 +246,25 @@ class SystemHooks : BaseHook() {
         @Volatile private var lastCpuTotal = -1L
         @Volatile private var lastCpuIdle = -1L
         @Volatile private var cachedCpuThermalZone = -1
+
+        // CPU reporter cleanup
+        @Volatile private var cpuReporterHandler: Handler? = null
+        @Volatile private var cpuReporterRunnable: Runnable? = null
+        @Volatile private var cpuReporterExecutor: java.util.concurrent.ExecutorService? = null
+
+        fun stopCpuReporter() {
+            if (!cpuReporterStarted) return
+            cpuReporterStarted = false
+            val runnable = cpuReporterRunnable
+            if (runnable != null) {
+                cpuReporterHandler?.removeCallbacks(runnable)
+            }
+            cpuReporterHandler = null
+            cpuReporterRunnable = null
+            cpuReporterExecutor?.shutdownNow()
+            cpuReporterExecutor = null
+            logStatic("CPU reporter stopped")
+        }
 
         // SystemUI shake-torch lifecycle
         @Volatile private var shakeContext: Context? = null

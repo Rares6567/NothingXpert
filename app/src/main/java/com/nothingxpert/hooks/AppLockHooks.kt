@@ -46,8 +46,25 @@ class AppLockHooks : BaseHook() {
                 }
             )
         }
+
+        safeHook("Activity.finish") {
+            XposedHelpers.findAndHookMethod(
+                Activity::class.java,
+                "finish",
+                object : XC_MethodHook() {
+                    override fun beforeHookedMethod(param: MethodHookParam) {
+                        val activity = param.thisObject as? Activity
+                        activity?.let {
+                            if (isAppLocked(it.packageName)) {
+                                cleanupActivity(it)
+                            }
+                        }
+                    }
+                }
+            )
+        }
     }
-    
+
     fun registerScreenOffReceiver() {
         if (screenOffReceiverRegistered) return
         val ctx = currentApplication() ?: return
@@ -125,10 +142,13 @@ class AppLockHooks : BaseHook() {
         }
         val filter = android.content.IntentFilter("com.nothingxpert.ACTION_UNLOCK")
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            activity.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
+            activity.registerReceiver(receiver, filter, "com.nothingxpert.permission.APP_LOCK", null, Context.RECEIVER_EXPORTED)
         } else {
-            activity.registerReceiver(receiver, filter)
+            activity.registerReceiver(receiver, filter, "com.nothingxpert.permission.APP_LOCK", null)
         }
+
+        // Track receiver for cleanup when activity is destroyed
+        pendingReceivers[activity.hashCode()] = receiver
 
         val intent = Intent()
         intent.component = android.content.ComponentName(MODULE_PKG, "$MODULE_PKG.LockScreenActivity")
@@ -145,8 +165,24 @@ class AppLockHooks : BaseHook() {
             log("Failed to launch lock screen: $e")
         }
     }
-    
+
+    private fun registerActivityReceiver(activity: Activity, receiver: android.content.BroadcastReceiver) {
+        pendingReceivers[activity.hashCode()] = receiver
+    }
+
+    private fun unregisterActivityReceiver(activity: Activity) {
+        val receiver = pendingReceivers.remove(activity.hashCode()) ?: return
+        try {
+            activity.unregisterReceiver(receiver)
+        } catch (_: Throwable) {}
+    }
+
+    fun cleanupActivity(activity: Activity) {
+        unregisterActivityReceiver(activity)
+    }
+
     companion object {
         @Volatile var screenOffReceiverRegistered = false
+        private val pendingReceivers = mutableMapOf<Int, android.content.BroadcastReceiver>()
     }
 }

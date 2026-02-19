@@ -97,26 +97,28 @@ class HookEntry : IXposedHookLoadPackage, XPrefs.OnPreferenceUpdateListener {
     
     private fun registerImeToggleReceiver() {
         val ctx = BaseHook.getSystemContext() ?: return
-        if (imeReceiverRegistered) return
-        try {
-            val filter = android.content.IntentFilter(ACTION_IME_BAR_TOGGLED)
-            val receiver = object : android.content.BroadcastReceiver() {
-                override fun onReceive(context: Context?, intent: android.content.Intent?) {
-                    if (intent?.action != ACTION_IME_BAR_TOGGLED) return
-                    forceStopPackage(ctx, GBOARD_PKG)
+        synchronized(imeLock) {
+            if (imeReceiverRegistered) return
+            try {
+                val filter = android.content.IntentFilter(ACTION_IME_BAR_TOGGLED)
+                val receiver = object : android.content.BroadcastReceiver() {
+                    override fun onReceive(context: Context?, intent: android.content.Intent?) {
+                        if (intent?.action != ACTION_IME_BAR_TOGGLED) return
+                        forceStopPackage(ctx, GBOARD_PKG)
+                    }
                 }
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                    ctx.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
+                } else {
+                    ctx.registerReceiver(receiver, filter)
+                }
+                imeReceiver = receiver
+                imeReceiverContext = ctx
+                imeReceiverRegistered = true
+                XposedBridge.log("NothingXpert: IME toggle receiver registered")
+            } catch (t: Throwable) {
+                XposedBridge.log("NothingXpert: Failed to register IME toggle receiver: $t")
             }
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                ctx.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
-            } else {
-                ctx.registerReceiver(receiver, filter)
-            }
-            imeReceiver = receiver
-            imeReceiverContext = ctx
-            imeReceiverRegistered = true
-            XposedBridge.log("NothingXpert: IME toggle receiver registered")
-        } catch (t: Throwable) {
-            XposedBridge.log("NothingXpert: Failed to register IME toggle receiver: $t")
         }
     }
     
@@ -147,15 +149,19 @@ class HookEntry : IXposedHookLoadPackage, XPrefs.OnPreferenceUpdateListener {
         @Volatile private var imeReceiverContext: Context? = null
 
         fun unregisterImeReceiver() {
-            if (!imeReceiverRegistered) return
-            try {
-                val ctx = imeReceiverContext ?: return
-                val recv = imeReceiver ?: return
-                ctx.unregisterReceiver(recv)
-                imeReceiver = null
-                imeReceiverContext = null
-                imeReceiverRegistered = false
-            } catch (_: Throwable) {}
+            synchronized(imeLock) {
+                if (!imeReceiverRegistered) return
+                try {
+                    val ctx = imeReceiverContext ?: return
+                    val recv = imeReceiver ?: return
+                    ctx.unregisterReceiver(recv)
+                    imeReceiver = null
+                    imeReceiverContext = null
+                    imeReceiverRegistered = false
+                } catch (_: Throwable) {}
+            }
         }
     }
+
+    private object imeLock
 }
