@@ -6,10 +6,11 @@ import de.robv.android.xposed.XSharedPreferences
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.callbacks.XC_LoadPackage
 import com.nothingxpert.XPrefs
+import java.util.concurrent.atomic.AtomicBoolean
 
 abstract class BaseHook {
     abstract val tag: String
-    
+
     abstract fun install(lpparam: XC_LoadPackage.LoadPackageParam)
     
     protected fun log(message: String) {
@@ -173,5 +174,39 @@ abstract class BaseHook {
                 method.invoke(null) as? android.app.Application
             } catch (_: Throwable) { null }
         }
+
+        // Shared flashlight state and utility to avoid tight coupling between hooks
+        private val flashlightState = AtomicBoolean(false)
+
+        fun toggleFlashlight(context: Context?): Boolean {
+            try {
+                val ctx = context ?: getSystemContext()
+                val cameraManager = ctx?.getSystemService(Context.CAMERA_SERVICE) as? android.hardware.camera2.CameraManager
+                if (cameraManager == null) {
+                    XposedBridge.log("NothingXpert: CameraManager is null")
+                    return false
+                }
+                val cameraId = cameraManager.cameraIdList.firstOrNull { id ->
+                    val characteristics = cameraManager.getCameraCharacteristics(id)
+                    characteristics.get(android.hardware.camera2.CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
+                }
+                if (cameraId == null) {
+                    XposedBridge.log("NothingXpert: No camera with flash found")
+                    return false
+                }
+                val isOn = flashlightState.get()
+                cameraManager.setTorchMode(cameraId, !isOn)
+                flashlightState.set(!isOn)
+                XposedBridge.log("NothingXpert: Flashlight toggled to ${!isOn}")
+                return true
+            } catch (t: Throwable) {
+                XposedBridge.log("NothingXpert: toggleFlashlight failed: $t")
+                return false
+            }
+        }
+
+        fun isFlashlightOn(): Boolean = flashlightState.get()
+
+        fun setFlashlightState(isOn: Boolean) = flashlightState.set(isOn)
     }
 }

@@ -289,7 +289,7 @@ class SystemHooks : BaseHook() {
                         val now = SystemClock.uptimeMillis()
                         if (magnitude > SHAKE_THRESHOLD && now - lastShakeTs > SHAKE_COOLDOWN_MS) {
                             lastShakeTs = now
-                            VolumeHooks.toggleFlashlight(context)
+                            BaseHook.toggleFlashlight(context)
                         }
                     }
                 }

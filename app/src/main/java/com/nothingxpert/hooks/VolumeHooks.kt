@@ -287,36 +287,16 @@ class VolumeHooks : BaseHook() {
         
         @Volatile var runnableContext: Context? = null
         @Volatile var policyVolumeInstalled = false
-        @Volatile var flashlightOn = false
         @Volatile var skipUpSent = false
         @Volatile var skipDownSent = false
         @Volatile var lastHandledVolumeEventTime: Long = -1L
         @Volatile var lastHandledVolumeEventAction: Int = -1
         @Volatile var lastHandledVolumeEventCode: Int = -1
-        
+
         fun toggleFlashlight(context: Context?) {
-            try {
-                val ctx = context ?: runnableContext ?: getSystemContext()
-                val cameraManager = ctx?.getSystemService(Context.CAMERA_SERVICE) as? android.hardware.camera2.CameraManager
-                if (cameraManager == null) {
-                    XposedBridge.log("NothingXpert/Volume: CameraManager is null")
-                    return
-                }
-                val cameraId = cameraManager.cameraIdList.firstOrNull { id ->
-                    val characteristics = cameraManager.getCameraCharacteristics(id)
-                    characteristics.get(android.hardware.camera2.CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
-                }
-                if (cameraId == null) {
-                    XposedBridge.log("NothingXpert/Volume: No camera with flash found")
-                    return
-                }
-                val isOn = flashlightOn
-                cameraManager.setTorchMode(cameraId, !isOn)
-                flashlightOn = !isOn
-                XposedBridge.log("NothingXpert/Volume: Flashlight toggled to ${!isOn}")
-            } catch (t: Throwable) {
-                XposedBridge.log("NothingXpert/Volume: toggleFlashlight failed: $t")
-            }
+            // Delegate to shared utility in BaseHook
+            val ctx = context ?: runnableContext ?: getSystemContext()
+            BaseHook.toggleFlashlight(ctx)
         }
     }
 }
