@@ -388,14 +388,48 @@ class FloatingWindowHooks : BaseHook() {
         val ramText = formatRamText(ramInfo)
         val tempText = formatTempText(cpuTemp, gpuTemp)
 
-        val d1 = if (isExpanded) "━━━━ BATTERY ━━━━" else ""
-        val d2 = if (isExpanded) "Level: ${batteryLevel ?: 0}%  Temp: ${batteryTemp ?: 0}°C" else ""
-        val d3 = if (isExpanded) "Current: $batteryCurrent  Volt: $batteryVoltage" else ""
-        val d4 = if (isExpanded) "━━━━ SYSTEM ━━━━" else ""
-        val d5 = if (isExpanded) "Uptime: $uptime  $swapInfo" else ""
-        val d6 = if (isExpanded) "Free RAM: $availRam" else ""
-        val d7 = if (isExpanded) cpuFreqs else ""
-        val d8 = if (isExpanded) "▲ Tap to collapse" else ""
+        // Only create detail strings when expanded to reduce allocations
+        val d1: String
+        val d2: String
+        val d3: String
+        val d4: String
+        val d5: String
+        val d6: String
+        val d7: String
+        val d8: String
+
+        if (isExpanded) {
+            d1 = "━━━━ BATTERY ━━━━"
+            stringBuilder.clear()
+            stringBuilder.append("Level: ").append(batteryLevel ?: 0).append("%  Temp: ").append(batteryTemp ?: 0).append("°C")
+            d2 = stringBuilder.toString()
+
+            stringBuilder.clear()
+            stringBuilder.append("Current: ").append(batteryCurrent).append("  Volt: ").append(batteryVoltage)
+            d3 = stringBuilder.toString()
+
+            d4 = "━━━━ SYSTEM ━━━━"
+
+            stringBuilder.clear()
+            stringBuilder.append("Uptime: ").append(uptime).append("  ").append(swapInfo)
+            d5 = stringBuilder.toString()
+
+            stringBuilder.clear()
+            stringBuilder.append("Free RAM: ").append(availRam)
+            d6 = stringBuilder.toString()
+
+            d7 = cpuFreqs
+            d8 = "▲ Tap to collapse"
+        } else {
+            d1 = ""
+            d2 = ""
+            d3 = ""
+            d4 = ""
+            d5 = ""
+            d6 = ""
+            d7 = ""
+            d8 = ""
+        }
 
         handler.post {
             if (cpuText != lastCpuText) {
@@ -1075,6 +1109,9 @@ class FloatingWindowHooks : BaseHook() {
         @Volatile private var lastDetail6: String? = null
         @Volatile private var lastDetail7: String? = null
         @Volatile private var lastDetail8: String? = null
+
+        // Reusable StringBuilder for formatting
+        private val stringBuilder = StringBuilder(128)
 
         @Volatile private var statsUpdaterRunning: Boolean = false
 
