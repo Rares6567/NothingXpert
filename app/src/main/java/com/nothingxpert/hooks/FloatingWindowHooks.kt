@@ -383,8 +383,8 @@ class FloatingWindowHooks : BaseHook() {
             swapInfo = cachedSwapInfo
         }
 
-        val cpuText = formatCpuText(cpuUsage, cpuTemp)
-        val gpuText = formatGpuText(gpuUsage, gpuTemp)
+        val cpuText = formatCpuText(cpuUsage)
+        val gpuText = formatGpuText(gpuUsage)
         val ramText = formatRamText(ramInfo)
         val tempText = formatTempText(cpuTemp, gpuTemp)
 
@@ -546,13 +546,13 @@ class FloatingWindowHooks : BaseHook() {
         } catch (_: Throwable) { "CPU Freq: --" }
     }
     
-    private fun formatCpuText(usage: Int?, temp: Int?): String {
+    private fun formatCpuText(usage: Int?): String {
         // Match MainActivity behavior: show 0% when null/unavailable
         val usageStr = "${usage ?: 0}%"
         return "CPU: $usageStr"
     }
-    
-    private fun formatGpuText(usage: Int?, temp: Int?): String {
+
+    private fun formatGpuText(usage: Int?): String {
         // Match MainActivity behavior: show 0% when null/unavailable
         val usageStr = "${usage ?: 0}%"
         return "GPU: $usageStr"
