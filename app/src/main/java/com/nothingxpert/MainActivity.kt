@@ -165,7 +165,11 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        ramHandler.removeCallbacks(ramUpdateRunnable)
+        // Clean up all handlers and callbacks
+        ramHandler.removeCallbacksAndMessages(null)
+        mainHandler.removeCallbacksAndMessages(null)
+        cpuUpdateHandler.removeCallbacksAndMessages(null)
+        gateRunnable?.let { ramHandler.removeCallbacks(it) }
     }
 
     private fun animateTitleOnStartup() {

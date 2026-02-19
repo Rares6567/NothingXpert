@@ -9,12 +9,12 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage
 
 class NotificationHooks : BaseHook() {
     override val tag = "Notification"
-    
+
     override fun install(lpparam: XC_LoadPackage.LoadPackageParam) {
         when (lpparam.packageName) {
             SYSTEMUI_PKG -> {
                 // Always install the hook - check preference inside the hook callback
-                installUndismissableNotificationsHook()
+                installUndismissableNotificationsHook(lpparam.classLoader)
             }
             "android" -> {
                 // System server: notification sound/vibration behavior
@@ -22,26 +22,31 @@ class NotificationHooks : BaseHook() {
             }
         }
     }
-    
-    private fun installUndismissableNotificationsHook() {
+
+    private fun installUndismissableNotificationsHook(classLoader: ClassLoader) {
         safeHook("StatusBarNotification.isNonDismissable") {
-            XposedHelpers.findAndHookMethod(
-                StatusBarNotification::class.java,
-                "isNonDismissable",
-                object : XC_MethodHook() {
-                    override fun afterHookedMethod(param: MethodHookParam) {
-                        val undismissablePackages = getPreferenceStringSet("pref_undismissable_packages", emptySet())
-                        if (undismissablePackages.isEmpty()) return
-                        
-                        val sbn = param.thisObject as StatusBarNotification
-                        val pkg = sbn.packageName
-                        
-                        if (undismissablePackages.contains(pkg)) {
-                            param.result = true
+            try {
+                val sbnClass = XposedHelpers.findClass("android.service.notification.StatusBarNotification", classLoader)
+                XposedHelpers.findAndHookMethod(
+                    sbnClass,
+                    "isNonDismissable",
+                    object : XC_MethodHook() {
+                        override fun afterHookedMethod(param: MethodHookParam) {
+                            val undismissablePackages = getPreferenceStringSet("pref_undismissable_packages", emptySet())
+                            if (undismissablePackages.isEmpty()) return
+
+                            val sbn = param.thisObject
+                            val pkg = XposedHelpers.getObjectField(sbn, "packageName") as? String ?: return
+
+                            if (undismissablePackages.contains(pkg)) {
+                                param.result = true
+                            }
                         }
                     }
-                }
-            )
+                )
+            } catch (t: Throwable) {
+                log("Failed to hook StatusBarNotification: $t")
+            }
         }
     }
 

@@ -1019,7 +1019,11 @@ class FloatingWindowHooks : BaseHook() {
                     // Enable: create the window if not already created
                     val ctx = systemUiContext ?: return@post
                     try {
-                        FloatingWindowHooks().createFloatingWindow(ctx)
+                        val instance = updaterInstance ?: FloatingWindowHooks()
+                        instance.createFloatingWindow(ctx)
+                        if (updaterInstance == null) {
+                            updaterInstance = instance
+                        }
                         floatingViewCreated = true
                     } catch (_: Throwable) {}
                 }

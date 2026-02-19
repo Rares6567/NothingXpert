@@ -111,6 +111,8 @@ class HookEntry : IXposedHookLoadPackage, XPrefs.OnPreferenceUpdateListener {
             } else {
                 ctx.registerReceiver(receiver, filter)
             }
+            imeReceiver = receiver
+            imeReceiverContext = ctx
             imeReceiverRegistered = true
             XposedBridge.log("NothingXpert: IME toggle receiver registered")
         } catch (t: Throwable) {
@@ -138,8 +140,22 @@ class HookEntry : IXposedHookLoadPackage, XPrefs.OnPreferenceUpdateListener {
         const val PREF_HIDE_IME_BAR = "pref_hide_ime_bar"
         const val PREF_UNDISMISSABLE_NOTIFS = "pref_undismissable_notifs"
         const val UNDISMISSABLE_PACKAGES = "pref_undismissable_packages"
-        
+
         @Volatile private var initialized = false
         @Volatile private var imeReceiverRegistered = false
+        @Volatile private var imeReceiver: android.content.BroadcastReceiver? = null
+        @Volatile private var imeReceiverContext: Context? = null
+
+        fun unregisterImeReceiver() {
+            if (!imeReceiverRegistered) return
+            try {
+                val ctx = imeReceiverContext ?: return
+                val recv = imeReceiver ?: return
+                ctx.unregisterReceiver(recv)
+                imeReceiver = null
+                imeReceiverContext = null
+                imeReceiverRegistered = false
+            } catch (_: Throwable) {}
+        }
     }
 }
