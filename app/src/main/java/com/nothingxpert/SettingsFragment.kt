@@ -7,7 +7,10 @@ import androidx.preference.PreferenceFragmentCompat
 import java.io.File
 
 class SettingsFragment : BasePreferenceFragment(), SharedPreferences.OnSharedPreferenceChangeListener {
+    @Suppress("DEPRECATION")
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
+        // MODE_WORLD_READABLE is required for Xposed module compatibility
+        // We also manually fix permissions via makeWorldReadable()
         preferenceManager.sharedPreferencesMode = Context.MODE_WORLD_READABLE
         preferenceManager.sharedPreferencesName = "${requireContext().packageName}_preferences"
         setPreferencesFromResource(R.xml.preferences, rootKey)

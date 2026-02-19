@@ -48,9 +48,11 @@ class MiscSettingsFragment : BasePreferenceFragment() {
         }
     }
 
+    @Suppress("DEPRECATION")
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
+        // MODE_WORLD_READABLE is required for Xposed module compatibility
+        // We also manually fix permissions via fixPermissions()
         preferenceManager.sharedPreferencesName = "${requireContext().packageName}_preferences"
-        // usage of MODE_WORLD_READABLE is deprecated and often ignored, so we rely on manual fixPermissions
         preferenceManager.sharedPreferencesMode = Context.MODE_WORLD_READABLE
         setPreferencesFromResource(R.xml.misc_preferences, rootKey)
         PreferenceUtils.fixPermissions(requireContext())

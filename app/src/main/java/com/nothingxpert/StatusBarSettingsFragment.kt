@@ -16,7 +16,9 @@ class StatusBarSettingsFragment : BasePreferenceFragment() {
         }, 100)
     }
 
+    @Suppress("DEPRECATION")
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
+        // MODE_WORLD_READABLE is required for Xposed module compatibility
         preferenceManager.sharedPreferencesName = "${requireContext().packageName}_preferences"
         preferenceManager.sharedPreferencesMode = Context.MODE_WORLD_READABLE
         setPreferencesFromResource(R.xml.preferences_status_bar, rootKey)
