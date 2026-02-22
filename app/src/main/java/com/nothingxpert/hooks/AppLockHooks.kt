@@ -191,6 +191,7 @@ class AppLockHooks : BaseHook() {
             return
         }
 
+        @Suppress("DEPRECATION")
         val promptIntent = try {
             km.createConfirmDeviceCredentialIntent("Unlock app", null)
         } catch (t: Throwable) {

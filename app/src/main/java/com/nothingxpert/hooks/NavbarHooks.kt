@@ -214,7 +214,7 @@ class NavbarHooks : BaseHook() {
                 return
             }
             val decor = window.decorView
-            log("decorView: ${decor?.javaClass?.name}, hasWindow: ${window != null}")
+            log("decorView: ${decor.javaClass.name}")
             val ids = listOf("input_method_nav_bar", "input_method_nav_back", "input_method_nav_ime_switcher")
             var hiddenAny = false
             for (name in ids) {

@@ -442,7 +442,7 @@ class MainActivity : BaseActivity() {
         // Click listener -> Apps hub
         categoryView.setOnClickListener {
             startActivity(Intent(this, AppsActivity::class.java))
-            overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
+            applyBackAnimation()
         }
     }
 
@@ -919,6 +919,7 @@ class MainActivity : BaseActivity() {
     // Backward compatibility for existing callers
     private fun readFile(path: String): String? = readFileSafe(path)
 
+    @Suppress("DEPRECATION")
     private fun scheduleRestartSelf() {
         if (restarting) return
         restarting = true
@@ -999,8 +1000,12 @@ class MainActivity : BaseActivity() {
                     // Increase text size for Turkish on TextViews that already have the custom font
                     if (isTurkish && turkishTextSize > 0) {
                         // Only apply to titles (bold text style or specific text sizes)
-                        val currentSize = child.textSize / resources.displayMetrics.scaledDensity
-                        if (currentSize >= 20f) { // Only increase titles, not summaries
+                        val titleThresholdPx = android.util.TypedValue.applyDimension(
+                            android.util.TypedValue.COMPLEX_UNIT_SP,
+                            20f,
+                            resources.displayMetrics
+                        )
+                        if (child.textSize >= titleThresholdPx) { // Only increase titles, not summaries
                             child.textSize = turkishTextSize
                         }
                     }
