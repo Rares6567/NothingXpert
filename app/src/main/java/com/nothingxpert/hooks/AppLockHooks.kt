@@ -1,6 +1,7 @@
 package com.nothingxpert.hooks
 
 import android.app.Activity
+import android.app.KeyguardManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
@@ -9,7 +10,6 @@ import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.TextView
-import androidx.core.content.ContextCompat
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
@@ -64,6 +64,39 @@ class AppLockHooks : BaseHook() {
                 }
             )
         }
+
+        safeHook("Instrumentation.callActivityOnActivityResult") {
+            XposedHelpers.findAndHookMethod(
+                android.app.Instrumentation::class.java,
+                "callActivityOnActivityResult",
+                Activity::class.java,
+                Int::class.javaPrimitiveType,
+                Int::class.javaPrimitiveType,
+                Intent::class.java,
+                object : XC_MethodHook() {
+                    override fun beforeHookedMethod(param: MethodHookParam) {
+                        val activity = param.args[0] as? Activity ?: return
+                        val requestCode = param.args[1] as? Int ?: return
+                        if (requestCode != APP_LOCK_REQUEST_CODE) return
+
+                        authInProgress.remove(activity.hashCode())
+                        val resultCode = param.args[2] as? Int ?: Activity.RESULT_CANCELED
+
+                        if (resultCode == Activity.RESULT_OK) {
+                            unlockedPackages.add(activity.packageName)
+                            removeOverlay(activity)
+                            log("Credential success for ${activity.packageName}")
+                        } else {
+                            removeOverlay(activity)
+                            log("Credential canceled/failed for ${activity.packageName} (result=$resultCode)")
+                            try {
+                                activity.finish()
+                            } catch (_: Throwable) {}
+                        }
+                    }
+                }
+            )
+        }
     }
 
     fun registerScreenOffReceiver() {
@@ -106,6 +139,11 @@ class AppLockHooks : BaseHook() {
     }
     
     private fun showLockOverlay(activity: Activity) {
+        if (activeOverlays.containsKey(activity.hashCode())) {
+            activity.window.decorView.post { maybeStartCredentialPrompt(activity) }
+            return
+        }
+
         val frameLayout = FrameLayout(activity)
         frameLayout.setBackgroundColor(Color.BLACK)
         frameLayout.isClickable = true
@@ -126,67 +164,72 @@ class AppLockHooks : BaseHook() {
         
         val decorView = activity.window.decorView as ViewGroup
         decorView.addView(frameLayout, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        
-        val receiver = object : android.content.BroadcastReceiver() {
-            override fun onReceive(context: Context?, intent: Intent?) {
-                if (intent?.action == "com.nothingxpert.ACTION_UNLOCK") {
-                    val pkg = intent.getStringExtra("extra_package_name")
-                    if (pkg == activity.packageName) {
-                        unlockedPackages.add(activity.packageName)
-                        decorView.removeView(frameLayout)
-                        try {
-                            activity.unregisterReceiver(this)
-                        } catch (_: Throwable) {}
-                    }
-                }
-            }
+        log("Overlay shown for ${activity.packageName}")
+
+        activeOverlays[activity.hashCode()] = frameLayout
+        activity.window.decorView.post { maybeStartCredentialPrompt(activity) }
+    }
+
+    private fun maybeStartCredentialPrompt(activity: Activity) {
+        val key = activity.hashCode()
+        if (!authInProgress.add(key)) return
+        log("Starting credential prompt for ${activity.packageName}")
+
+        val km = activity.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
+        if (km == null) {
+            log("KeyguardManager is null for ${activity.packageName}")
+            authInProgress.remove(key)
+            return
         }
-        val filter = android.content.IntentFilter("com.nothingxpert.ACTION_UNLOCK")
-        ContextCompat.registerReceiver(
-            activity,
-            receiver,
-            filter,
-            "com.nothingxpert.permission.APP_LOCK",
-            null,
-            ContextCompat.RECEIVER_EXPORTED
-        )
 
-        // Track receiver for cleanup when activity is destroyed
-        pendingReceivers[activity.hashCode()] = receiver
+        if (!km.isDeviceSecure) {
+            // No secure lock configured on device; don't hard-lock the app forever.
+            authInProgress.remove(key)
+            unlockedPackages.add(activity.packageName)
+            removeOverlay(activity)
+            log("Device is not secure; auto-unlocking ${activity.packageName}")
+            return
+        }
 
-        val intent = Intent()
-        intent.component = android.content.ComponentName(MODULE_PKG, "$MODULE_PKG.LockScreenActivity")
-        intent.addFlags(
-            Intent.FLAG_ACTIVITY_NEW_TASK or
-            Intent.FLAG_ACTIVITY_CLEAR_TASK or
-            Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS or
-            Intent.FLAG_ACTIVITY_NO_HISTORY
-        )
-        intent.putExtra("extra_package_name", activity.packageName)
+        val promptIntent = try {
+            km.createConfirmDeviceCredentialIntent("Unlock app", null)
+        } catch (t: Throwable) {
+            log("Failed to create credential prompt: $t")
+            null
+        }
+
+        if (promptIntent == null) {
+            authInProgress.remove(key)
+            log("createConfirmDeviceCredentialIntent returned null for ${activity.packageName}")
+            return
+        }
+
         try {
-            activity.startActivity(intent)
-        } catch (e: Exception) {
-            log("Failed to launch lock screen: $e")
+            activity.startActivityForResult(promptIntent, APP_LOCK_REQUEST_CODE)
+            log("Credential prompt launched for ${activity.packageName}")
+        } catch (t: Throwable) {
+            authInProgress.remove(key)
+            log("Failed to start credential prompt: $t")
         }
     }
 
-    private fun registerActivityReceiver(activity: Activity, receiver: android.content.BroadcastReceiver) {
-        pendingReceivers[activity.hashCode()] = receiver
-    }
-
-    private fun unregisterActivityReceiver(activity: Activity) {
-        val receiver = pendingReceivers.remove(activity.hashCode()) ?: return
+    private fun removeOverlay(activity: Activity) {
+        val overlay = activeOverlays.remove(activity.hashCode()) ?: return
         try {
-            activity.unregisterReceiver(receiver)
+            val parent = overlay.parent as? ViewGroup
+            parent?.removeView(overlay)
         } catch (_: Throwable) {}
     }
 
     fun cleanupActivity(activity: Activity) {
-        unregisterActivityReceiver(activity)
+        authInProgress.remove(activity.hashCode())
+        removeOverlay(activity)
     }
 
     companion object {
+        private const val APP_LOCK_REQUEST_CODE = 0x4C4B
         @Volatile var screenOffReceiverRegistered = false
-        private val pendingReceivers = mutableMapOf<Int, android.content.BroadcastReceiver>()
+        private val activeOverlays = mutableMapOf<Int, FrameLayout>()
+        private val authInProgress = mutableSetOf<Int>()
     }
 }

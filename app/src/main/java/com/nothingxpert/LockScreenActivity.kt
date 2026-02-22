@@ -97,7 +97,7 @@ class LockScreenActivity : Activity() {
         val intent = Intent(ACTION_UNLOCK)
         intent.putExtra(EXTRA_PACKAGE_NAME, targetPackage)
         intent.setPackage(targetPackage) // Only send to the locked app
-        sendBroadcast(intent, "com.nothingxpert.permission.APP_LOCK")
+        sendBroadcast(intent)
     }
 
     @Suppress("DEPRECATION")

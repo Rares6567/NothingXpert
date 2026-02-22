@@ -89,7 +89,6 @@
         <activity
             android:name=".LockScreenActivity"
             android:exported="true"
-            android:permission="com.nothingxpert.permission.APP_LOCK"
             android:theme="@style/Theme.AppCompat.NoActionBar"
             android:excludeFromRecents="true"
             android:noHistory="true"
