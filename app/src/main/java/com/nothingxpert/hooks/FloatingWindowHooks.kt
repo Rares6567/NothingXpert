@@ -23,6 +23,7 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage
 import com.nothingxpert.XPrefs
 import com.nothingxpert.util.RootShell
 import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -311,12 +312,16 @@ class FloatingWindowHooks : BaseHook() {
     private fun scheduleStatsUpdate() {
         // Avoid spawning a new Thread each tick; reuse a single worker and drop frames if it lags.
         if (!statsUpdateInFlight.compareAndSet(false, true)) return
-        statsExecutor.execute {
-            try {
-                performStatsUpdate()
-            } finally {
-                statsUpdateInFlight.set(false)
+        try {
+            statsExecutor.execute {
+                try {
+                    performStatsUpdate()
+                } finally {
+                    statsUpdateInFlight.set(false)
+                }
             }
+        } catch (_: RejectedExecutionException) {
+            statsUpdateInFlight.set(false)
         }
     }
     

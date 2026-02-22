@@ -73,9 +73,6 @@ class LockScreenActivity : Activity() {
                 }
                 override fun onAuthenticationError(errorCode: Int, errString: CharSequence?) {
                     super.onAuthenticationError(errorCode, errString)
-                    if (errorCode == BiometricPrompt.BIOMETRIC_ERROR_USER_CANCELED) {
-                         killTargetApp()
-                    }
                     runOnUiThread { finish() }
                 }
                 override fun onAuthenticationFailed() {
@@ -101,16 +98,6 @@ class LockScreenActivity : Activity() {
         intent.putExtra(EXTRA_PACKAGE_NAME, targetPackage)
         intent.setPackage(targetPackage) // Only send to the locked app
         sendBroadcast(intent, "com.nothingxpert.permission.APP_LOCK")
-    }
-
-    private fun killTargetApp() {
-        // We can't easily kill the other app from here without permissions.
-        // Instead, we rely on the hook waiting for our broadcast.
-        // If we finish without broadcasting success, the hook should kill the activity.
-        // But the hook doesn't know we finished.
-        // So we send a LOCK broadcast? Or just do nothing and let the user remain locked?
-        // Actually, if we finish, the user sees the original app (which is covered by black overlay in hook).
-        // The hook needs to listen for activity resume/result.
     }
 
     @Suppress("DEPRECATION")

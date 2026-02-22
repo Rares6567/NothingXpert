@@ -8,6 +8,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowInsets
 import android.view.inputmethod.EditorInfo
+import androidx.core.content.ContextCompat
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
@@ -37,11 +38,12 @@ class NavbarHooks : BaseHook() {
                     forceStopPackage(ctx, GBOARD_PKG)
                 }
             }
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                ctx.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
-            } else {
-                ctx.registerReceiver(receiver, filter)
-            }
+            ContextCompat.registerReceiver(
+                ctx,
+                receiver,
+                filter,
+                ContextCompat.RECEIVER_EXPORTED
+            )
             imeReceiverRegistered = true
             log("IME toggle receiver registered")
         } catch (t: Throwable) {

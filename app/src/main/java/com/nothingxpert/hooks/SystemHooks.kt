@@ -2,20 +2,15 @@ package com.nothingxpert.hooks
 
 import android.content.Context
 import android.content.Intent
-import android.os.Handler
-import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
 import android.view.View
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
-import com.nothingxpert.util.RootShell
 
 class SystemHooks : BaseHook() {
     override val tag = "System"
-    
-    private val handler by lazy { Handler(Looper.getMainLooper()) }
     
     override fun install(lpparam: XC_LoadPackage.LoadPackageParam) {
         if (lpparam.packageName == SYSTEMUI_PKG) {
@@ -48,126 +43,6 @@ class SystemHooks : BaseHook() {
         // SystemUI-only: keep a stable app context so we can register/unregister later.
         if (shakeContext == null) shakeContext = context.applicationContext
         refreshFromPrefs()
-    }
-    
-    private fun startCpuReporter(lpparam: XC_LoadPackage.LoadPackageParam) {
-        try {
-            val at = Class.forName("android.app.ActivityThread")
-            val thread = XposedHelpers.callStaticMethod(at, "currentActivityThread")
-            val sysContext = XposedHelpers.callMethod(thread, "getSystemContext") as? Context ?: return
-            if (cpuReporterStarted) return
-            cpuReporterStarted = true
-            log("starting CPU reporter")
-            val cpuHandler = Handler(Looper.getMainLooper())
-            val backgroundExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { r ->
-                Thread(r, "NothingXpert-CpuMonitor").apply { isDaemon = true }
-            }
-            val runnable = object : Runnable {
-                override fun run() {
-                    if (!cpuReporterStarted) {
-                        // Stop if reporter was stopped
-                        return
-                    }
-                    // Do file I/O on background thread
-                    backgroundExecutor.execute {
-                        try {
-                            val usage = sampleCpuUsage()
-                            val temp = readCpuTemp()
-                            // Post results back to main thread
-                            cpuHandler.post {
-                                try {
-                                    if (usage != null) {
-                                        android.provider.Settings.Global.putString(sysContext.contentResolver, "nothingxpert_cpu_usage", usage.toString())
-                                    }
-                                    if (temp != null) {
-                                        android.provider.Settings.Global.putString(sysContext.contentResolver, "nothingxpert_cpu_temp", temp.toString())
-                                    }
-                                } catch (_: Throwable) { }
-                            }
-                        } catch (_: Throwable) { }
-                    }
-                    cpuHandler.postDelayed(this, 2000)
-                }
-            }
-            // Store for cleanup
-            cpuReporterHandler = cpuHandler
-            cpuReporterRunnable = runnable
-            cpuReporterExecutor = backgroundExecutor
-            cpuHandler.post(runnable)
-        } catch (t: Throwable) {
-            log("CPU reporter init failed: $t")
-        }
-    }
-    
-    private fun sampleCpuUsage(): Int? {
-        val stat = readFile("/proc/stat") ?: return null
-        val line = stat.lineSequence().firstOrNull { it.startsWith("cpu ") } ?: return null
-        val parts = line.trim().split("\\s+".toRegex())
-        if (parts.size < 8) return null
-        val user = parts[1].toLongOrNull() ?: return null
-        val nice = parts[2].toLongOrNull() ?: return null
-        val system = parts[3].toLongOrNull() ?: return null
-        val idle = parts[4].toLongOrNull() ?: return null
-        val iowait = parts.getOrNull(5)?.toLongOrNull() ?: 0
-        val irq = parts.getOrNull(6)?.toLongOrNull() ?: 0
-        val softirq = parts.getOrNull(7)?.toLongOrNull() ?: 0
-        val steal = parts.getOrNull(8)?.toLongOrNull() ?: 0
-
-        val idleAll = idle + iowait
-        val nonIdle = user + nice + system + irq + softirq + steal
-        val total = idleAll + nonIdle
-
-        if (lastCpuTotal < 0 || lastCpuIdle < 0) {
-            lastCpuTotal = total
-            lastCpuIdle = idleAll
-            return null
-        }
-        val totalDiff = total - lastCpuTotal
-        val idleDiff = idleAll - lastCpuIdle
-        lastCpuTotal = total
-        lastCpuIdle = idleAll
-        if (totalDiff <= 0 || idleDiff < 0) return null
-        return (((totalDiff - idleDiff).toDouble() / totalDiff.toDouble()) * 100.0).toInt().coerceIn(0, 100)
-    }
-    
-    private fun readCpuTemp(): Int? {
-        val cached = cachedCpuThermalZone
-        if (cached >= 0) {
-            val raw = readFile("/sys/class/thermal/thermal_zone$cached/temp")?.trim()
-            val v = raw?.toIntOrNull()
-            if (v != null) {
-                val c = if (v > 1000 || v < -1000) v / 1000 else v
-                if (c in 0..120) return c
-            }
-            cachedCpuThermalZone = -1
-        }
-
-        for (i in 0..120) {
-            val type = readFile("/sys/class/thermal/thermal_zone$i/type")
-                ?.trim()
-                ?.lowercase()
-                ?: continue
-            if (type.contains("cpu") || type.contains("cpuss") || type.contains("soc")) {
-                val raw = readFile("/sys/class/thermal/thermal_zone$i/temp")?.trim() ?: continue
-                val v = raw.toIntOrNull() ?: continue
-                val c = if (v > 1000 || v < -1000) v / 1000 else v
-                if (c in 0..120) {
-                    cachedCpuThermalZone = i
-                    return c
-                }
-            }
-        }
-        return null
-    }
-
-    private fun readFile(path: String): String? {
-        // Prefer root so we don't depend on the hooked process' (android/SystemUI) file access.
-        RootShell.cat(path)?.let { return it }
-        return try {
-            java.io.File(path).takeIf { it.exists() && it.canRead() }?.readText()
-        } catch (_: Throwable) {
-            null
-        }
     }
     
     private fun installStatusBarDoubleTapHook(lpparam: XC_LoadPackage.LoadPackageParam) {
@@ -242,29 +117,6 @@ class SystemHooks : BaseHook() {
         @Volatile private var shakeListenerRegistered = false
         @Volatile private var lastShakeTs = 0L
         @Volatile private var isProximityNear = false
-        @Volatile private var cpuReporterStarted = false
-        @Volatile private var lastCpuTotal = -1L
-        @Volatile private var lastCpuIdle = -1L
-        @Volatile private var cachedCpuThermalZone = -1
-
-        // CPU reporter cleanup
-        @Volatile private var cpuReporterHandler: Handler? = null
-        @Volatile private var cpuReporterRunnable: Runnable? = null
-        @Volatile private var cpuReporterExecutor: java.util.concurrent.ExecutorService? = null
-
-        fun stopCpuReporter() {
-            if (!cpuReporterStarted) return
-            cpuReporterStarted = false
-            val runnable = cpuReporterRunnable
-            if (runnable != null) {
-                cpuReporterHandler?.removeCallbacks(runnable)
-            }
-            cpuReporterHandler = null
-            cpuReporterRunnable = null
-            cpuReporterExecutor?.shutdownNow()
-            cpuReporterExecutor = null
-            logStatic("CPU reporter stopped")
-        }
 
         // SystemUI shake-torch lifecycle
         @Volatile private var shakeContext: Context? = null

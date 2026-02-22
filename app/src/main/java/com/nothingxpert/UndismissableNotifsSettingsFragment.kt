@@ -2,8 +2,6 @@ package com.nothingxpert
 
 import android.content.Context
 import android.content.SharedPreferences
-import android.content.pm.ApplicationInfo
-import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -34,14 +32,7 @@ class UndismissableNotifsSettingsFragment : Fragment() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         try {
-            @Suppress("DEPRECATION")
             prefs = requireContext().getSharedPreferences("${MODULE_PKG}_preferences", Context.MODE_PRIVATE)
-            try {
-                @Suppress("DEPRECATION")
-                prefs = requireContext().getSharedPreferences("${MODULE_PKG}_preferences", Context.MODE_WORLD_READABLE)
-            } catch (_: SecurityException) {
-                prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(requireContext())
-            }
         } catch (e: Exception) {
             prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(requireContext())
         }

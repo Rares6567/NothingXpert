@@ -2,8 +2,6 @@ package com.nothingxpert
 
 import android.content.Context
 import android.content.SharedPreferences
-import android.content.pm.ApplicationInfo
-import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -30,26 +28,12 @@ class AppLockSettingsFragment : Fragment() {
     private var sortDescending = false
     private var showLockedOnly = false
 
-    // TODO: Define locked packages preference key
     private val PREF_LOCKED_PACKAGES = "pref_locked_packages"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         try {
-            // Attempt to get World Readable prefs if possible, or standard prefs
-            // The hook reads from XSharedPreferences, so we just write to standard prefs in MODE_WORLD_READABLE (deprecated but works with Xposed)
-            // Or simpler: just use default prefs and make sure the file is readable.
-            // Modern Android blocks world-readable. We'll use standard prefs and assume XSharedPreferences handles reading.
-            @Suppress("DEPRECATION")
             prefs = requireContext().getSharedPreferences("${MODULE_PKG}_preferences", Context.MODE_PRIVATE)
-            // Make world readable just in case (deprecated)
-             try {
-                 @Suppress("DEPRECATION")
-                 prefs = requireContext().getSharedPreferences("${MODULE_PKG}_preferences", Context.MODE_WORLD_READABLE)
-             } catch (_: SecurityException) {
-                 // ignore
-                 prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(requireContext())
-             }
         } catch (e: Exception) {
             prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(requireContext())
         }

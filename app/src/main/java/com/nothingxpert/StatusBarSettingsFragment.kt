@@ -2,7 +2,6 @@ package com.nothingxpert
 
 import android.content.Context
 import android.os.Bundle
-import androidx.preference.PreferenceFragmentCompat
 
 class StatusBarSettingsFragment : BasePreferenceFragment() {
     
@@ -16,11 +15,9 @@ class StatusBarSettingsFragment : BasePreferenceFragment() {
         }, 100)
     }
 
-    @Suppress("DEPRECATION")
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
-        // MODE_WORLD_READABLE is required for Xposed module compatibility
         preferenceManager.sharedPreferencesName = "${requireContext().packageName}_preferences"
-        preferenceManager.sharedPreferencesMode = Context.MODE_WORLD_READABLE
+        preferenceManager.sharedPreferencesMode = Context.MODE_PRIVATE
         setPreferencesFromResource(R.xml.preferences_status_bar, rootKey)
         PreferenceUtils.fixPermissions(requireContext())
         PrefsUtil.ensurePrefsAccessible(requireContext())

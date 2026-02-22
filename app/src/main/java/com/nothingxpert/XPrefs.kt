@@ -7,8 +7,8 @@ import de.robv.android.xposed.XposedBridge
 
 object XPrefs {
     private const val TAG = "NothingXpert"
-    private const val AUTHORITY = "com.nothingxpert"
-    private const val PREF_FILE = "com.nothingxpert_preferences"
+    private const val AUTHORITY = RemotePrefProvider.AUTHORITY
+    private const val PREF_FILE = RemotePrefProvider.PREF_FILE
     
     @Volatile
     var prefs: RemotePreferences? = null

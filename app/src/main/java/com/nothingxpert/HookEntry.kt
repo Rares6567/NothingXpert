@@ -3,6 +3,7 @@ package com.nothingxpert
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import androidx.core.content.ContextCompat
 import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
@@ -107,11 +108,12 @@ class HookEntry : IXposedHookLoadPackage, XPrefs.OnPreferenceUpdateListener {
                         forceStopPackage(ctx, GBOARD_PKG)
                     }
                 }
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                    ctx.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
-                } else {
-                    ctx.registerReceiver(receiver, filter)
-                }
+                ContextCompat.registerReceiver(
+                    ctx,
+                    receiver,
+                    filter,
+                    ContextCompat.RECEIVER_EXPORTED
+                )
                 imeReceiver = receiver
                 imeReceiverContext = ctx
                 imeReceiverRegistered = true

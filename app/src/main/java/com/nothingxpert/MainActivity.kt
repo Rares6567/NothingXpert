@@ -477,8 +477,8 @@ class MainActivity : BaseActivity() {
                     // Wait for second sample
                     try { Thread.sleep(CPU_SAMPLE_DELAY_MS) } catch (_: InterruptedException) { return@Thread }
 
-                    // Check if we're still alive and not destroyed
-                    if (isDestroyed) return@Thread
+                    // Exit early if activity is finishing/destroyed before second sample.
+                    if (isDestroyed || isFinishing) return@Thread
 
                     val secondLine = readCpuStatLine()
                     val secondSample = if (secondLine != null) parseCpuTotals(secondLine) else null
@@ -495,7 +495,7 @@ class MainActivity : BaseActivity() {
                             val temp = readCpuTempExact()
                             val tempStr = temp?.let { "${it}°C" } ?: "--°C"
                             runOnUiThread {
-                                if (!isDestroyed) {
+                                if (!isDestroyed && !isFinishing) {
                                     cpuValue.text = getString(R.string.cpu_monitor_format, pct, tempStr)
                                 }
                             }

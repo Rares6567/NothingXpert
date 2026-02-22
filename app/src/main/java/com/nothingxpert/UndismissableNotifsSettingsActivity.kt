@@ -1,7 +1,7 @@
 package com.nothingxpert
 
 import android.os.Bundle
-import androidx.appcompat.app.AppCompatActivity
+import androidx.activity.addCallback
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -12,6 +12,10 @@ import com.google.android.material.appbar.MaterialToolbar
 class UndismissableNotifsSettingsActivity : BaseActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        onBackPressedDispatcher.addCallback(this) {
+            finish()
+            applyForwardAnimation()
+        }
 
         // Enable edge-to-edge display
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -44,11 +48,5 @@ class UndismissableNotifsSettingsActivity : BaseActivity() {
         finish()
         applyForwardAnimation()
         return true
-    }
-
-    @Suppress("DEPRECATION")
-    override fun onBackPressed() {
-        super.onBackPressed()
-        applyForwardAnimation()
     }
 }

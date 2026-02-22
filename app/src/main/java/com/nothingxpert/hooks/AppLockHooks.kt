@@ -9,6 +9,7 @@ import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.TextView
+import androidx.core.content.ContextCompat
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
@@ -141,11 +142,14 @@ class AppLockHooks : BaseHook() {
             }
         }
         val filter = android.content.IntentFilter("com.nothingxpert.ACTION_UNLOCK")
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            activity.registerReceiver(receiver, filter, "com.nothingxpert.permission.APP_LOCK", null, Context.RECEIVER_EXPORTED)
-        } else {
-            activity.registerReceiver(receiver, filter, "com.nothingxpert.permission.APP_LOCK", null)
-        }
+        ContextCompat.registerReceiver(
+            activity,
+            receiver,
+            filter,
+            "com.nothingxpert.permission.APP_LOCK",
+            null,
+            ContextCompat.RECEIVER_EXPORTED
+        )
 
         // Track receiver for cleanup when activity is destroyed
         pendingReceivers[activity.hashCode()] = receiver
