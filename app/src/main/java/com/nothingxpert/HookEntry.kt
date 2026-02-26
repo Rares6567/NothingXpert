@@ -89,10 +89,15 @@ class HookEntry : IXposedHookLoadPackage, XPrefs.OnPreferenceUpdateListener {
         if (key == SystemHooks.PREF_SHAKE_TORCH) {
             SystemHooks.refreshFromPrefs()
         }
-        // Handle floating window preference changes
-        if (key == FloatingWindowHooks.PREF_FLOATING_WINDOW_ENABLED || 
+        if (key == FloatingWindowHooks.PREF_FLOATING_WINDOW_ENABLED ||
             key == FloatingWindowHooks.PREF_FLOATING_WINDOW_SIZE) {
             FloatingWindowHooks.refreshFromPrefs()
+        }
+        if (key == null || key == "pref_locked_packages") {
+            AppLockHooks.lockedPackagesSnapshot = null
+        }
+        if (key == null || key == "pref_undismissable_packages") {
+            NotificationHooks.undismissableSnapshot = null
         }
     }
     

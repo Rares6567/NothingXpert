@@ -135,7 +135,13 @@ class AppLockHooks : BaseHook() {
     }
     
     private fun isAppLocked(packageName: String): Boolean {
-        return getPreferenceStringSet("pref_locked_packages", emptySet()).contains(packageName)
+        // Use a process-local snapshot so we don't hit the synchronized pref cache
+        // on every activity create across every hooked process.
+        val snapshot = lockedPackagesSnapshot
+        if (snapshot != null) return snapshot.contains(packageName)
+        val fresh = getPreferenceStringSet("pref_locked_packages", emptySet())
+        lockedPackagesSnapshot = fresh
+        return fresh.contains(packageName)
     }
     
     private fun showLockOverlay(activity: Activity) {
@@ -232,5 +238,9 @@ class AppLockHooks : BaseHook() {
         @Volatile var screenOffReceiverRegistered = false
         private val activeOverlays = mutableMapOf<Int, FrameLayout>()
         private val authInProgress = mutableSetOf<Int>()
+
+        // Cached locked-packages set. Avoids hitting the synchronized pref cache on every
+        // activity create. Cleared by HookEntry.onPreferenceUpdated when the key changes.
+        @Volatile var lockedPackagesSnapshot: Set<String>? = null
     }
 }

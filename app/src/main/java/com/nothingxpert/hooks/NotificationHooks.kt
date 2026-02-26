@@ -32,7 +32,11 @@ class NotificationHooks : BaseHook() {
                     "isNonDismissable",
                     object : XC_MethodHook() {
                         override fun afterHookedMethod(param: MethodHookParam) {
-                            val undismissablePackages = getPreferenceStringSet("pref_undismissable_packages", emptySet())
+                            // Use process-local snapshot to avoid hitting the synchronized
+                            // pref cache on every single notification isNonDismissable check.
+                            val undismissablePackages = undismissableSnapshot
+                                ?: getPreferenceStringSet("pref_undismissable_packages", emptySet())
+                                    .also { undismissableSnapshot = it }
                             if (undismissablePackages.isEmpty()) return
 
                             val sbn = param.thisObject
@@ -114,5 +118,9 @@ class NotificationHooks : BaseHook() {
     companion object {
         private const val PREF_UNOBTRUSIVE_SCREEN_ON = "pref_unobtrusive_notifs_screen_on"
         @Volatile private var remotePrefsInitAttempted: Boolean = false
+
+        // Snapshot of the undismissable packages set. Avoids hitting the synchronized
+        // pref cache on every notification event. Cleared by HookEntry on pref change.
+        @Volatile var undismissableSnapshot: Set<String>? = null
     }
 }
