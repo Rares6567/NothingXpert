@@ -48,14 +48,24 @@ class MainActivity : BaseActivity() {
 
     private val ramHandler = Handler(Looper.getMainLooper())
     private val mainHandler = Handler(Looper.getMainLooper())
-    private val cpuUpdateHandler = Handler(Looper.getMainLooper())
+    private val cpuHandlerThread = HandlerThread("NothingXpert-CPU").also { it.start() }
+    private val cpuUpdateHandler = Handler(cpuHandlerThread.looper)
     private val ramUpdateRunnable = object : Runnable {
         override fun run() {
-            // Update only while main tab stays visible
             if (isMainTabSelected && lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) {
-                updateRamUsage()
+                // Binder call + sysfs reads offloaded to the CPU handler thread;
+                // only the final setText touches the main thread.
+                cpuUpdateHandler.post {
+                    val ramText = buildRamText()
+                    val gpuText = buildGpuText()
+                    runOnUiThread {
+                        if (!isDestroyed && !isFinishing) {
+                            ramValue.text = ramText
+                            gpuValue.text = gpuText
+                        }
+                    }
+                }
                 triggerCpuUpdate()
-                updateGpuUsage()
                 ramHandler.postDelayed(this, UPDATE_INTERVAL_MS)
             }
         }
@@ -163,18 +173,13 @@ class MainActivity : BaseActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        // Clean up all handlers and callbacks
         ramHandler.removeCallbacksAndMessages(null)
         mainHandler.removeCallbacksAndMessages(null)
         cpuUpdateHandler.removeCallbacksAndMessages(null)
+        cpuHandlerThread.quitSafely()
         gateRunnable?.let { ramHandler.removeCallbacks(it) }
 
-        // Interrupt and clean up CPU init thread if still running
-        cpuInitThread?.let {
-            if (it.isAlive) {
-                it.interrupt()
-            }
-        }
+        cpuInitThread?.let { if (it.isAlive) it.interrupt() }
         cpuInitThread = null
     }
 
@@ -453,9 +458,17 @@ class MainActivity : BaseActivity() {
         sectionMain = findViewById(R.id.section_main)
         sectionOptions = findViewById(R.id.section_options)
 
-        // Initial static update (no loop)
-        updateRamUsage()
-        updateGpuUsage()
+        // Initial static update off the main thread
+        cpuUpdateHandler.post {
+            val ramText = buildRamText()
+            val gpuText = buildGpuText()
+            runOnUiThread {
+                if (!isDestroyed && !isFinishing) {
+                    ramValue.text = ramText
+                    gpuValue.text = gpuText
+                }
+            }
+        }
         initCpuUsage() // Initialize CPU reading in background
     }
 
@@ -697,22 +710,15 @@ class MainActivity : BaseActivity() {
         animator.start()
     }
 
-    private fun updateRamUsage() {
-        val am = getSystemService(ActivityManager::class.java) ?: return
+    private fun buildRamText(): String {
+        val am = getSystemService(ActivityManager::class.java) ?: return ""
         val info = ActivityManager.MemoryInfo()
         am.getMemoryInfo(info)
-
         val total = info.totalMem
         val free = info.availMem
         val used = total - free
         val percent = if (total > 0) ((used.toDouble() / total) * 100).toInt() else 0
-
-        ramValue.text = getString(
-            R.string.ram_monitor_format,
-            formatBytes(used),
-            formatBytes(total),
-            percent
-        )
+        return getString(R.string.ram_monitor_format, formatBytes(used), formatBytes(total), percent)
     }
 
     /**
@@ -720,20 +726,26 @@ class MainActivity : BaseActivity() {
      * This syncs CPU updates with the 1-second update cycle
      */
     private fun triggerCpuUpdate() {
-        // Read first sample immediately
-        val firstLine = readCpuStatLine()
-        val firstSample = if (firstLine != null) parseCpuTotals(firstLine) else null
+        // All /proc/stat reads and the 500 ms inter-sample sleep happen on the
+        // background HandlerThread so the main thread is never blocked.
+        cpuUpdateHandler.post {
+            val firstLine = readCpuStatLine()
+            val firstSample = if (firstLine != null) parseCpuTotals(firstLine) else null
 
-        if (firstSample == null) {
-            // Fall back to last known value
-            val tempStr = readCpuTempExact()?.let { "${it}°C" } ?: "--°C"
-            val shownUsage = if (lastCpuUsage >= 0) lastCpuUsage else 0
-            cpuValue.text = getString(R.string.cpu_monitor_format, shownUsage, tempStr)
-            return
-        }
+            if (firstSample == null) {
+                val tempStr = readCpuTempExact()?.let { "${it}°C" } ?: "--°C"
+                val shownUsage = if (lastCpuUsage >= 0) lastCpuUsage else 0
+                runOnUiThread {
+                    if (!isDestroyed && !isFinishing) {
+                        cpuValue.text = getString(R.string.cpu_monitor_format, shownUsage, tempStr)
+                    }
+                }
+                return@post
+            }
 
-        // Schedule second sample after a delay (within the 1-second cycle)
-        cpuUpdateHandler.postDelayed({
+            try { Thread.sleep(CPU_SAMPLE_DELAY_MS) } catch (_: InterruptedException) { return@post }
+            if (isDestroyed || isFinishing) return@post
+
             val secondLine = readCpuStatLine()
             val secondSample = if (secondLine != null) parseCpuTotals(secondLine) else null
 
@@ -741,22 +753,21 @@ class MainActivity : BaseActivity() {
                 val totalDiff = secondSample.first - firstSample.first
                 val idleDiff = secondSample.second - firstSample.second
                 if (totalDiff > 0 && idleDiff >= 0) {
-                    val busy = (totalDiff - idleDiff).toDouble()
-                    val pct = ((busy / totalDiff.toDouble()) * 100.0).toInt().coerceIn(0, 100)
+                    val pct = (((totalDiff - idleDiff).toDouble() / totalDiff) * 100.0).toInt().coerceIn(0, 100)
                     lastCpuUsage = pct
                     pct
-                } else {
-                    lastCpuUsage
-                }
-            } else {
-                lastCpuUsage
-            }
+                } else lastCpuUsage
+            } else lastCpuUsage
 
             val temp = readCpuTempExact()
             val tempStr = temp?.let { "${it}°C" } ?: "--°C"
             val shownUsage = if (usage >= 0) usage else 0
-            cpuValue.text = getString(R.string.cpu_monitor_format, shownUsage, tempStr)
-        }, CPU_SAMPLE_DELAY_MS)
+            runOnUiThread {
+                if (!isDestroyed && !isFinishing) {
+                    cpuValue.text = getString(R.string.cpu_monitor_format, shownUsage, tempStr)
+                }
+            }
+        }
     }
 
     private fun parseCpuTotals(statContent: String?): Pair<Long, Long>? {
@@ -779,7 +790,7 @@ class MainActivity : BaseActivity() {
     }
 
     private fun readCpuStatLine(): String? {
-        // Try direct read first
+        // Direct read — /proc/stat is world-readable, no root needed.
         try {
             java.io.File("/proc/stat").takeIf { it.exists() }?.let { file ->
                 file.bufferedReader().useLines { seq ->
@@ -790,7 +801,7 @@ class MainActivity : BaseActivity() {
         } catch (e: Exception) {
             Log.w(CPU_LOG_TAG, "direct /proc/stat read failed", e)
         }
-        // Fallback via root shell (persistent)
+        // Root shell fallback for locked-down builds
         try {
             val out = RootShell.cat("/proc/stat", timeoutMs = 1500L)
             val line = out?.lineSequence()?.firstOrNull { it.startsWith("cpu ") }
@@ -798,25 +809,15 @@ class MainActivity : BaseActivity() {
         } catch (e: Exception) {
             Log.w(CPU_LOG_TAG, "root cat /proc/stat failed", e)
         }
-        // Last resort: fallback via shell (non-root)
-        try {
-            val process = ProcessBuilder("sh", "-c", "cat /proc/stat").redirectErrorStream(true).start()
-            process.inputStream.bufferedReader().useLines { seq ->
-                val line = seq.firstOrNull { it.startsWith("cpu ") }
-                if (line != null) return line
-            }
-        } catch (e: Exception) {
-            Log.w(CPU_LOG_TAG, "shell cat /proc/stat failed", e)
-        }
         return null
     }
 
-    private fun updateGpuUsage() {
+    private fun buildGpuText(): String {
         val percent = readGpuBusyPercent()
         val temp = readGpuTemp()
         val tempStr = temp?.let { "${it}°C" } ?: "--°C"
         val pctStr = percent?.let { "$it%" } ?: "0%"
-        gpuValue.text = getString(R.string.gpu_monitor_format, pctStr, tempStr)
+        return getString(R.string.gpu_monitor_format, pctStr, tempStr)
     }
 
     private fun readGpuBusyPercent(): Int? {
