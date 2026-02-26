@@ -661,8 +661,12 @@ class FloatingWindowHooks : BaseHook() {
             if (v != null) {
                 val c = if (v > 1000 || v < -1000) v / 1000 else v
                 if (c in 0..120) return c
+                // Value parsed but out of sane range — zone is no longer valid, rescan.
+                cachedCpuThermalZone = -1
             }
-            cachedCpuThermalZone = -1
+            // null/empty read is transient; keep the cached zone and return last good value
+            // rather than triggering an expensive 0..120 scan every slow tick.
+            if (v == null) return null
         }
 
         // Try specific thermal zones first
@@ -741,8 +745,10 @@ class FloatingWindowHooks : BaseHook() {
             if (v != null) {
                 val c = if (v > 1000 || v < -1000) v / 1000 else v
                 if (c in 0..120) return c
+                // Value parsed but out of sane range — zone stale, rescan.
+                cachedGpuThermalZone = -1
             }
-            cachedGpuThermalZone = -1
+            if (v == null) return null
         }
 
         // kgsl temp
@@ -1129,14 +1135,14 @@ class FloatingWindowHooks : BaseHook() {
         @Volatile private var screenReceiver: android.content.BroadcastReceiver? = null
         @Volatile private var screenReceiverRegistered: Boolean = false
 
-        private const val UPDATE_INTERVAL_COLLAPSED_MS = 2000L
-        private const val UPDATE_INTERVAL_EXPANDED_MS = 1000L
-        private const val UPDATE_INTERVAL_IDLE_MS = 5000L
-        private const val SLOW_READ_INTERVAL_MS = 2000L
-        private const val DETAIL_READ_INTERVAL_MS = 5000L
+        private const val UPDATE_INTERVAL_COLLAPSED_MS = 3000L
+        private const val UPDATE_INTERVAL_EXPANDED_MS = 2000L
+        private const val UPDATE_INTERVAL_IDLE_MS = 8000L
+        private const val SLOW_READ_INTERVAL_MS = 3000L
+        private const val DETAIL_READ_INTERVAL_MS = 6000L
 
-        private const val LOW_ACTIVITY_PCT = 5
-        private const val LOW_ACTIVITY_STREAK_FOR_IDLE = 3
+        private const val LOW_ACTIVITY_PCT = 10
+        private const val LOW_ACTIVITY_STREAK_FOR_IDLE = 2
 
         @Volatile private var lowActivityStreak: Int = 0
     }
