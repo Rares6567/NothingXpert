@@ -183,16 +183,20 @@ class SystemHooks : BaseHook() {
                     }
                 } else null
 
+                // Use SENSOR_DELAY_NORMAL (~5 Hz) with a 500 ms report latency so the
+                // sensor hub can batch samples and avoid waking the AP on every event.
                 sensorManager.registerListener(
                     accelListener,
                     accel,
-                    android.hardware.SensorManager.SENSOR_DELAY_NORMAL
+                    android.hardware.SensorManager.SENSOR_DELAY_NORMAL,
+                    500_000 // maxReportLatencyUs — let hardware batch for up to 500 ms
                 )
                 if (prox != null && proxListener != null) {
                     sensorManager.registerListener(
                         proxListener,
                         prox,
-                        android.hardware.SensorManager.SENSOR_DELAY_NORMAL
+                        android.hardware.SensorManager.SENSOR_DELAY_NORMAL,
+                        500_000
                     )
                 }
 
