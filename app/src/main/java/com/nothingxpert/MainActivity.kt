@@ -47,7 +47,6 @@ class MainActivity : BaseActivity() {
     }
 
     private val ramHandler = Handler(Looper.getMainLooper())
-    private val mainHandler = Handler(Looper.getMainLooper())
     private val cpuHandlerThread = HandlerThread("NothingXpert-CPU").also { it.start() }
     private val cpuUpdateHandler = Handler(cpuHandlerThread.looper)
     private val ramUpdateRunnable = object : Runnable {
@@ -174,7 +173,6 @@ class MainActivity : BaseActivity() {
     override fun onDestroy() {
         super.onDestroy()
         ramHandler.removeCallbacksAndMessages(null)
-        mainHandler.removeCallbacksAndMessages(null)
         cpuUpdateHandler.removeCallbacksAndMessages(null)
         cpuHandlerThread.quitSafely()
         gateRunnable?.let { ramHandler.removeCallbacks(it) }
@@ -333,8 +331,9 @@ class MainActivity : BaseActivity() {
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_CANCEL_CURRENT
             )
             val am = ctx.getSystemService(AlarmManager::class.java)
+            // Non-wakeup: device is already awake when this fires (user just hit restart).
             am?.setExact(
-                AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                AlarmManager.ELAPSED_REALTIME,
                 android.os.SystemClock.elapsedRealtime() + delayMs,
                 pi
             )
@@ -927,7 +926,7 @@ class MainActivity : BaseActivity() {
         stopResourceMonitor()
         // Ensure prefs are synced before relaunch so LSPosed picks up changes
         PrefsUtil.ensurePrefsAccessible(this)
-        mainHandler.postDelayed({
+        ramHandler.postDelayed({
             val launch = Intent(this, MainActivity::class.java)
             launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
             startActivity(launch)

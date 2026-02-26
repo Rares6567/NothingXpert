@@ -939,12 +939,15 @@ class FloatingWindowHooks : BaseHook() {
             }
             floatingViewCreated = false
             unregisterScreenReceiver()
+            statsExecutor.shutdownNow()
+            statsExecutor = newStatsExecutor()
+            statsUpdateInFlight.set(false)
             updaterInstance = null
             windowManager = null
             windowLayoutParams = null
         } catch (_: Throwable) {}
     }
-    
+
     data class RamInfo(
         val used: Long,
         val total: Long,
@@ -1012,6 +1015,9 @@ class FloatingWindowHooks : BaseHook() {
                     detailTextView8 = null
                     floatingViewCreated = false
                     unregisterScreenReceiver()
+                    statsExecutor.shutdownNow()
+                    statsExecutor = newStatsExecutor()
+                    statsUpdateInFlight.set(false)
                     updaterInstance = null
                     windowManager = null
                     windowLayoutParams = null
@@ -1087,9 +1093,10 @@ class FloatingWindowHooks : BaseHook() {
             }
         }
 
-        private val statsExecutor = Executors.newSingleThreadExecutor { r ->
+        private fun newStatsExecutor() = Executors.newSingleThreadExecutor { r ->
             Thread(r, "NothingXpert-FloatingStats").apply { isDaemon = true }
         }
+        private var statsExecutor = newStatsExecutor()
         private val statsUpdateInFlight = AtomicBoolean(false)
 
         // Cached values to reduce per-tick work.

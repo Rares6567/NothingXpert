@@ -44,7 +44,9 @@ abstract class BaseHook {
             val now = SystemClock.uptimeMillis()
             val xsp = cachedXsp
             if (xsp != null && now - lastXspCheck < XSP_CACHE_MS) {
-                if (xsp.hasFileChanged()) xsp.reload()
+                // Skip hasFileChanged() (a stat() syscall) on every call within the TTL window.
+                // The per-key pref cache (PREF_CACHE_MS) and HookEntry.onPreferenceUpdated
+                // handle freshness; a stat() here adds no meaningful benefit.
                 return xsp
             }
             
