@@ -223,7 +223,11 @@ class SettingsFragment : BasePreferenceFragment(), SharedPreferences.OnSharedPre
                 try {
                     val cmd = "if [ -r \"$src\" ]; then cat \"$src\" > \"${tmp.absolutePath}\"; fi"
                     val p = Runtime.getRuntime().exec(arrayOf("su", "-c", cmd))
-                    p.waitFor()
+                    if (!p.waitFor(5, TimeUnit.SECONDS)) {
+                        p.destroyForcibly()
+                        tmp.delete()
+                        continue
+                    }
                     if (tmp.exists() && tmp.length() > 0) {
                         val bitmap = android.graphics.BitmapFactory.decodeFile(tmp.absolutePath)
                         tmp.delete()
