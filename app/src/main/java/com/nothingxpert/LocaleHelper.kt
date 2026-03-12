@@ -23,12 +23,12 @@ object LocaleHelper {
     }
 
     fun getLanguage(context: Context): String {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        return prefs.getString(PREF_LANGUAGE, DEFAULT_LANGUAGE) ?: DEFAULT_LANGUAGE
+        val prefs = getDefaultPrefsOrNull(context)
+        return prefs?.getString(PREF_LANGUAGE, DEFAULT_LANGUAGE) ?: DEFAULT_LANGUAGE
     }
 
     private fun persistLanguage(context: Context, language: String) {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+        val prefs = getDefaultPrefsOrNull(context) ?: return
         prefs.edit().putString(PREF_LANGUAGE, language).apply()
     }
 
@@ -69,8 +69,9 @@ object LocaleHelper {
      * If app language is set to "", returns the system language.
      */
     fun getEffectiveLanguage(context: Context): String {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        val appLanguage = prefs.getString(PREF_LANGUAGE, DEFAULT_LANGUAGE) ?: DEFAULT_LANGUAGE
+        val appLanguage = getDefaultPrefsOrNull(context)
+            ?.getString(PREF_LANGUAGE, DEFAULT_LANGUAGE)
+            ?: DEFAULT_LANGUAGE
         
         return if (appLanguage.isEmpty()) {
             // App is using system default, get system language
@@ -85,5 +86,15 @@ object LocaleHelper {
      */
     fun isTurkish(context: Context): Boolean {
         return getEffectiveLanguage(context) == "tr"
+    }
+
+    private fun getDefaultPrefsOrNull(context: Context): SharedPreferences? {
+        return try {
+            PreferenceManager.getDefaultSharedPreferences(context)
+        } catch (_: IllegalStateException) {
+            null
+        } catch (_: Throwable) {
+            null
+        }
     }
 }
