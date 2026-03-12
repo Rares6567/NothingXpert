@@ -1291,10 +1291,15 @@ class DepthWallpaperHooks : BaseHook() {
 
         fun decodeSubjectBitmap(path: String): Bitmap? {
             return try {
+                val sampleSize = calculateSampleSize(path)
+                val opts = if (sampleSize > 1) {
+                    BitmapFactory.Options().apply { inSampleSize = sampleSize }
+                } else null
+
                 if (path.startsWith("content://")) {
                     val ctx = systemUiContext ?: return null
                     ctx.contentResolver.openInputStream(Uri.parse(path))?.use { input ->
-                        BitmapFactory.decodeStream(input)
+                        BitmapFactory.decodeStream(input, null, opts)
                     }
                 } else {
                     val file = java.io.File(path)
@@ -1302,13 +1307,44 @@ class DepthWallpaperHooks : BaseHook() {
                         XposedBridge.log("NothingXpert/DepthWallpaper: Subject file not readable: $path")
                         null
                     } else {
-                        BitmapFactory.decodeFile(path)
+                        BitmapFactory.decodeFile(path, opts)
                     }
                 }
             } catch (e: Throwable) {
                 XposedBridge.log("NothingXpert/DepthWallpaper: decodeSubjectBitmap failed: $e")
                 null
             }
+        }
+
+        private fun calculateSampleSize(path: String): Int {
+            val ctx = systemUiContext ?: return 1
+            val wm = ctx.getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return 1
+            val bounds = wm.currentWindowMetrics.bounds
+            val targetW = bounds.width().coerceAtLeast(1)
+            val targetH = bounds.height().coerceAtLeast(1)
+
+            val boundsOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            try {
+                if (path.startsWith("content://")) {
+                    ctx.contentResolver.openInputStream(Uri.parse(path))?.use { input ->
+                        BitmapFactory.decodeStream(input, null, boundsOpts)
+                    }
+                } else {
+                    BitmapFactory.decodeFile(path, boundsOpts)
+                }
+            } catch (_: Throwable) {
+                return 1
+            }
+
+            val imgW = boundsOpts.outWidth
+            val imgH = boundsOpts.outHeight
+            if (imgW <= 0 || imgH <= 0) return 1
+
+            var sample = 1
+            while (imgW / (sample * 2) >= targetW && imgH / (sample * 2) >= targetH) {
+                sample *= 2
+            }
+            return sample
         }
 
         fun resizeBitmapToDisplay(bitmap: Bitmap): Bitmap {
