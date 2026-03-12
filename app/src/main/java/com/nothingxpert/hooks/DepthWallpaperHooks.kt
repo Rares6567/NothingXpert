@@ -1169,7 +1169,7 @@ class DepthWallpaperHooks : BaseHook() {
                 }
 
                 val resized = resizeBitmapToDisplay(bitmap)
-                if (resized != bitmap) bitmap.recycle()
+                if (resized != bitmap && !bitmap.isRecycled) bitmap.recycle()
 
                 mainHandler.post {
                     val old = currentBitmap
@@ -1193,42 +1193,6 @@ class DepthWallpaperHooks : BaseHook() {
                 log("Error loading subject: $e")
             }
         }
-    }
-
-    private fun decodeSubjectBitmap(path: String): Bitmap? {
-        return try {
-            if (path.startsWith("content://")) {
-                val ctx = systemUiContext ?: return null
-                ctx.contentResolver.openInputStream(Uri.parse(path))?.use { input ->
-                    BitmapFactory.decodeStream(input)
-                }
-            } else {
-                val file = java.io.File(path)
-                if (!file.exists() || !file.canRead()) {
-                    log("Subject file not readable: $path")
-                    null
-                } else {
-                    BitmapFactory.decodeFile(path)
-                }
-            }
-        } catch (e: Throwable) {
-            log("decodeSubjectBitmap failed: $e")
-            null
-        }
-    }
-
-    private fun resizeBitmapToDisplay(bitmap: Bitmap): Bitmap {
-        val ctx = systemUiContext ?: return bitmap
-        val wm = ctx.getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return bitmap
-        val bounds: Rect = wm.currentWindowMetrics.bounds
-        val screenW = bounds.width().coerceAtLeast(1)
-        val screenH = bounds.height().coerceAtLeast(1)
-
-        if (bitmap.width == screenW && bitmap.height == screenH) {
-            return bitmap
-        }
-
-        return Bitmap.createScaledBitmap(bitmap, screenW, screenH, true)
     }
 
     companion object {
@@ -1300,26 +1264,9 @@ class DepthWallpaperHooks : BaseHook() {
                 if (forceReload) {
                     bgExecutor.submit {
                         try {
-                            val bitmap = decodeSubjectBitmapStatic(path) ?: return@submit
-
-                            val ctx = systemUiContext
-                            val resized = if (ctx != null) {
-                                val wm = ctx.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
-                                if (wm != null) {
-                                    val bounds: Rect = wm.currentWindowMetrics.bounds
-                                    val screenW = bounds.width().coerceAtLeast(1)
-                                    val screenH = bounds.height().coerceAtLeast(1)
-                                    if (bitmap.width == screenW && bitmap.height == screenH) {
-                                        bitmap
-                                    } else {
-                                        Bitmap.createScaledBitmap(bitmap, screenW, screenH, true).also { scaled ->
-                                            if (scaled != bitmap) {
-                                                bitmap.recycle()
-                                            }
-                                        }
-                                    }
-                                } else bitmap
-                            } else bitmap
+                            val bitmap = decodeSubjectBitmap(path) ?: return@submit
+                            val resized = resizeBitmapToDisplay(bitmap)
+                            if (resized != bitmap && !bitmap.isRecycled) bitmap.recycle()
 
                             mainHandler.post {
                                 val old = currentBitmap
@@ -1342,7 +1289,7 @@ class DepthWallpaperHooks : BaseHook() {
             }
         }
 
-        private fun decodeSubjectBitmapStatic(path: String): Bitmap? {
+        fun decodeSubjectBitmap(path: String): Bitmap? {
             return try {
                 if (path.startsWith("content://")) {
                     val ctx = systemUiContext ?: return null
@@ -1352,14 +1299,30 @@ class DepthWallpaperHooks : BaseHook() {
                 } else {
                     val file = java.io.File(path)
                     if (!file.exists() || !file.canRead()) {
+                        XposedBridge.log("NothingXpert/DepthWallpaper: Subject file not readable: $path")
                         null
                     } else {
                         BitmapFactory.decodeFile(path)
                     }
                 }
-            } catch (_: Throwable) {
+            } catch (e: Throwable) {
+                XposedBridge.log("NothingXpert/DepthWallpaper: decodeSubjectBitmap failed: $e")
                 null
             }
+        }
+
+        fun resizeBitmapToDisplay(bitmap: Bitmap): Bitmap {
+            val ctx = systemUiContext ?: return bitmap
+            val wm = ctx.getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return bitmap
+            val bounds: Rect = wm.currentWindowMetrics.bounds
+            val screenW = bounds.width().coerceAtLeast(1)
+            val screenH = bounds.height().coerceAtLeast(1)
+
+            if (bitmap.width == screenW && bitmap.height == screenH) {
+                return bitmap
+            }
+
+            return Bitmap.createScaledBitmap(bitmap, screenW, screenH, true)
         }
     }
 }
