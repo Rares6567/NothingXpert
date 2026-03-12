@@ -4,6 +4,8 @@
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <uses-permission android:name="android.permission.USE_FINGERPRINT" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
 
     <!-- Signature-level permission for secure app-lock broadcasts -->
     <permission
@@ -39,6 +41,11 @@
         <meta-data
             android:name="xposedscope"
             android:resource="@array/module_scope" />
+
+        <!-- ML Kit subject segmentation auto-download -->
+        <meta-data
+            android:name="com.google.mlkit.vision.DEPENDENCIES"
+            android:value="subject_segment" />
 
         <activity
             android:name=".MainActivity"

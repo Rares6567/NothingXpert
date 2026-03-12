@@ -97,6 +97,21 @@
     <string name="app_lock_locked_text">Locked by Nothing Xpert</string>
     <string name="lockscreen_locked_text">Locked</string>
 
+    <!-- Depth Wallpaper -->
+    <string name="pref_category_depth_wallpaper">Depth Wallpaper</string>
+    <string name="pref_depth_wallpaper_title">Enable depth wallpaper</string>
+    <string name="pref_depth_wallpaper_summary">Layer a foreground image over your lock screen wallpaper for a depth effect</string>
+    <string name="pref_depth_wallpaper_opacity_title">Subject opacity</string>
+    <string name="pref_depth_wallpaper_crop_title">Visible subject height (%)</string>
+    <string name="pref_depth_wallpaper_status_title">Segmentation status</string>
+    <string name="pref_depth_wallpaper_status_disabled">Disabled</string>
+    <string name="pref_depth_wallpaper_status_ready">Subject extracted — active on lock screen</string>
+    <string name="pref_depth_wallpaper_extracting">Extracting subject from wallpaper…</string>
+    <string name="pref_depth_wallpaper_no_wallpaper">Could not read lockscreen wallpaper (live wallpapers may not be supported)</string>
+    <string name="pref_depth_wallpaper_no_subject">No subject detected in wallpaper</string>
+    <string name="pref_depth_wallpaper_subject_extracted">Subject extracted successfully</string>
+    <string name="pref_depth_wallpaper_extraction_failed">Subject extraction failed — check Google Play Services</string>
+
     <!-- Volume action entries -->
     <string name="volume_action_default">Default (volume change)</string>
     <string name="volume_action_none">Do nothing</string>

@@ -63,4 +63,5 @@ dependencies {
 	implementation("androidx.preference:preference-ktx:1.2.1")
 	implementation("com.google.android.material:material:1.11.0")
 	implementation("com.crossbowffs.remotepreferences:remotepreferences:0.8")
+	implementation("com.google.android.gms:play-services-mlkit-subject-segmentation:16.0.0-beta1")
 }

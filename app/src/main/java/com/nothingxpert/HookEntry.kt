@@ -25,7 +25,8 @@ class HookEntry : IXposedHookLoadPackage, XPrefs.OnPreferenceUpdateListener {
         AppLockHooks(),
         NotificationHooks(),
         SystemHooks(),
-        FloatingWindowHooks()
+        FloatingWindowHooks(),
+        DepthWallpaperHooks()
     )
     
     override fun handleLoadPackage(lpparam: XC_LoadPackage.LoadPackageParam) {
@@ -98,6 +99,11 @@ class HookEntry : IXposedHookLoadPackage, XPrefs.OnPreferenceUpdateListener {
         }
         if (key == null || key == "pref_undismissable_packages") {
             NotificationHooks.undismissableSnapshot = null
+        }
+        if (key == DepthWallpaperHooks.PREF_DEPTH_ENABLED ||
+            key == DepthWallpaperHooks.PREF_DEPTH_IMAGE ||
+            key == DepthWallpaperHooks.PREF_DEPTH_OPACITY) {
+            DepthWallpaperHooks.refreshFromPrefs()
         }
     }
     

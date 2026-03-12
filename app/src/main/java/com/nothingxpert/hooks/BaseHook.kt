@@ -33,6 +33,7 @@ abstract class BaseHook {
         private const val XSP_CACHE_MS = 10_000L
         
         private val prefCache = HashMap<String, Pair<Long, Boolean>>()
+        private val intPrefCache = HashMap<String, Pair<Long, Int>>()
         private val stringPrefCache = HashMap<String, Pair<Long, String>>()
         private val stringSetPrefCache = HashMap<String, Pair<Long, Set<String>>>()
         
@@ -101,6 +102,30 @@ abstract class BaseHook {
             return result
         }
         
+        fun getPreferenceInt(key: String, defValue: Int): Int {
+            val now = SystemClock.uptimeMillis()
+
+            synchronized(intPrefCache) {
+                intPrefCache[key]?.let { (ts, v) ->
+                    if (now - ts < PREF_CACHE_MS) return v
+                }
+            }
+
+            val value = if (useRemotePrefs) {
+                try { XPrefs.getInt(key, defValue) } catch (_: Throwable) { null }
+            } else null
+
+            val result = value ?: try {
+                val xsp = getXsp()
+                if (xsp?.contains(key) == true) xsp.getInt(key, defValue) else defValue
+            } catch (_: Throwable) { defValue }
+
+            synchronized(intPrefCache) {
+                intPrefCache[key] = now to result
+            }
+            return result
+        }
+
         fun getPreferenceString(key: String, defValue: String): String {
             val now = SystemClock.uptimeMillis()
             
@@ -152,10 +177,12 @@ abstract class BaseHook {
         fun clearCache(key: String? = null) {
             if (key != null) {
                 synchronized(prefCache) { prefCache.remove(key) }
+                synchronized(intPrefCache) { intPrefCache.remove(key) }
                 synchronized(stringPrefCache) { stringPrefCache.remove(key) }
                 synchronized(stringSetPrefCache) { stringSetPrefCache.remove(key) }
             } else {
                 synchronized(prefCache) { prefCache.clear() }
+                synchronized(intPrefCache) { intPrefCache.clear() }
                 synchronized(stringPrefCache) { stringPrefCache.clear() }
                 synchronized(stringSetPrefCache) { stringSetPrefCache.clear() }
             }
