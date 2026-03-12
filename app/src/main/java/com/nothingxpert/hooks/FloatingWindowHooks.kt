@@ -37,7 +37,8 @@ class FloatingWindowHooks : BaseHook() {
     
     override fun install(lpparam: XC_LoadPackage.LoadPackageParam) {
         if (lpparam.packageName != SYSTEMUI_PKG) return
-        
+        if (!hookInstalled.compareAndSet(false, true)) return
+
         safeHook("SystemUIApplication.onCreate") {
             XposedHelpers.findAndHookMethod(
                 "com.android.systemui.SystemUIApplication",
@@ -47,7 +48,7 @@ class FloatingWindowHooks : BaseHook() {
                     override fun afterHookedMethod(param: MethodHookParam) {
                         val context = param.thisObject as? Context ?: return
                         systemUiContext = context.applicationContext
-                        
+
                         // Start the floating window if enabled
                         handler.postDelayed({
                             initFloatingWindow()
@@ -64,23 +65,32 @@ class FloatingWindowHooks : BaseHook() {
             log("Floating window disabled")
             return
         }
-        
-        if (floatingViewCreated) {
+
+        if (!floatingViewCreated.compareAndSet(false, true)) {
             log("Floating window already created")
             return
         }
-        
+
         try {
             createFloatingWindow(ctx)
-            floatingViewCreated = true
             log("Floating window created successfully")
         } catch (t: Throwable) {
+            // Only roll back if the view was never actually added
+            if (floatingView == null) {
+                floatingViewCreated.set(false)
+            }
             log("Failed to create floating window: $t")
         }
     }
     
     @SuppressLint("ClickableViewAccessibility")
     private fun createFloatingWindow(context: Context) {
+        // Hard guard: if a view is already attached, tear it down first
+        floatingView?.let { existing ->
+            try { windowManager?.removeView(existing) } catch (_: Throwable) {}
+            floatingView = null
+        }
+
         val wm = context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return
 
         // Track the active instance so screen on/off receiver can pause/resume without creating new objects.
@@ -281,7 +291,6 @@ class FloatingWindowHooks : BaseHook() {
             if (!statsUpdaterRunning) return
             if (!getPreferenceBoolean(PREF_FLOATING_WINDOW_ENABLED, false)) {
                 stopStatsUpdater()
-                hideFloatingWindow()
                 return
             }
 
@@ -937,7 +946,7 @@ class FloatingWindowHooks : BaseHook() {
                 detailTextView7 = null
                 detailTextView8 = null
             }
-            floatingViewCreated = false
+            floatingViewCreated.set(false)
             unregisterScreenReceiver()
             statsExecutor.shutdownNow()
             statsExecutor = newStatsExecutor()
@@ -959,9 +968,10 @@ class FloatingWindowHooks : BaseHook() {
     companion object {
         const val PREF_FLOATING_WINDOW_ENABLED = "pref_floating_window_enabled"
         const val PREF_FLOATING_WINDOW_SIZE = "pref_floating_window_size"
-        
+
+        private val hookInstalled = AtomicBoolean(false)
         @Volatile private var systemUiContext: Context? = null
-        @Volatile private var floatingViewCreated = false
+        private val floatingViewCreated = AtomicBoolean(false)
         @Volatile private var floatingView: View? = null
         @Volatile private var windowManager: WindowManager? = null
         @Volatile private var windowLayoutParams: WindowManager.LayoutParams? = null
@@ -989,7 +999,7 @@ class FloatingWindowHooks : BaseHook() {
         @Volatile private var currentFont: Typeface? = null
         
         fun toggleFloatingWindow() {
-            if (floatingViewCreated) {
+            if (floatingViewCreated.get()) {
                 try {
                     updaterInstance?.stopStatsUpdater()
                     floatingView?.let { view ->
@@ -1013,7 +1023,7 @@ class FloatingWindowHooks : BaseHook() {
                     detailTextView6 = null
                     detailTextView7 = null
                     detailTextView8 = null
-                    floatingViewCreated = false
+                    floatingViewCreated.set(false)
                     unregisterScreenReceiver()
                     statsExecutor.shutdownNow()
                     statsExecutor = newStatsExecutor()
@@ -1030,19 +1040,23 @@ class FloatingWindowHooks : BaseHook() {
             mainHandler.post {
                 val enabled = BaseHook.getPreferenceBoolean(PREF_FLOATING_WINDOW_ENABLED, false)
                 if (!enabled) {
-                    // Disable: remove the window
                     toggleFloatingWindow()
-                } else if (!floatingViewCreated) {
-                    // Enable: create the window if not already created
-                    val ctx = systemUiContext ?: return@post
+                } else if (floatingViewCreated.compareAndSet(false, true)) {
+                    val ctx = systemUiContext ?: run {
+                        floatingViewCreated.set(false)
+                        return@post
+                    }
                     try {
                         val instance = updaterInstance ?: FloatingWindowHooks()
                         instance.createFloatingWindow(ctx)
                         if (updaterInstance == null) {
                             updaterInstance = instance
                         }
-                        floatingViewCreated = true
-                    } catch (_: Throwable) {}
+                    } catch (t: Throwable) {
+                        if (floatingView == null) {
+                            floatingViewCreated.set(false)
+                        }
+                    }
                 }
             }
         }
@@ -1060,7 +1074,7 @@ class FloatingWindowHooks : BaseHook() {
                         when (intent?.action) {
                             android.content.Intent.ACTION_SCREEN_ON -> {
                                 // Resume updates quickly when user wakes device.
-                                if (floatingViewCreated && BaseHook.getPreferenceBoolean(PREF_FLOATING_WINDOW_ENABLED, false)) {
+                                if (floatingViewCreated.get() && BaseHook.getPreferenceBoolean(PREF_FLOATING_WINDOW_ENABLED, false)) {
                                     updaterInstance?.startStatsUpdater()
                                 }
                             }
