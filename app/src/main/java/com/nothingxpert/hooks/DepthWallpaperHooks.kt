@@ -660,14 +660,16 @@ class DepthWallpaperHooks : BaseHook() {
             offsetSignatureValue(currentWallpaperYOffset)
         ).joinToString(":")
 
-        if (signature == lastRenderedWallpaperSignature &&
-            now - lastRenderedWallpaperCaptureAt < RENDERED_WALLPAPER_CAPTURE_DEBOUNCE_MS
-        ) {
-            return
-        }
+        synchronized(renderedWallpaperLock) {
+            if (signature == lastRenderedWallpaperSignature &&
+                now - lastRenderedWallpaperCaptureAt < RENDERED_WALLPAPER_CAPTURE_DEBOUNCE_MS
+            ) {
+                return
+            }
 
-        lastRenderedWallpaperSignature = signature
-        lastRenderedWallpaperCaptureAt = now
+            lastRenderedWallpaperSignature = signature
+            lastRenderedWallpaperCaptureAt = now
+        }
 
         bgExecutor.submit {
             try {
@@ -1241,6 +1243,7 @@ class DepthWallpaperHooks : BaseHook() {
 
         private val bgExecutor by lazy { Executors.newSingleThreadExecutor() }
         private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
+        private val renderedWallpaperLock = Any()
 
         fun refreshFromPrefs() {
             val path = BaseHook.getPreferenceString(PREF_DEPTH_IMAGE, "")
