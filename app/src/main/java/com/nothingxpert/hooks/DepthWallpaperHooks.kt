@@ -180,18 +180,7 @@ class DepthWallpaperHooks : BaseHook() {
         depthContainer = container
         subjectImageView = imageView
         dimmingOverlay = dimOverlay
-        keyguardRootView = findViewByIdName(root, context, "keyguard_root_view")
-        clockContainerView = findViewByIdName(root, context, "keyguard_clock_container")
-        sharedNotificationContainerView = findViewByIdName(root, context, "shared_notification_container")
-            ?: findDescendantByClassName(
-                root,
-                "com.android.systemui.statusbar.notification.stack.ui.view.SharedNotificationContainer"
-            )
-        notificationStackView = findViewByIdName(root, context, "notification_stack_scroller")
-            ?: findDescendantByClassName(
-                root,
-                "com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout"
-            )
+        refreshTrackedViews(root, context)
 
         root.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
             updateDepthLayering()
@@ -201,6 +190,9 @@ class DepthWallpaperHooks : BaseHook() {
             updateDepthLayering()
         }
         clockContainerView?.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            updateDepthClip()
+        }
+        widgetHostView?.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
             updateDepthClip()
         }
         sharedNotificationContainerView?.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
@@ -219,6 +211,33 @@ class DepthWallpaperHooks : BaseHook() {
         return if (id != 0) root.findViewById(id) else null
     }
 
+    private fun refreshTrackedViews(root: ViewGroup, context: Context) {
+        if (keyguardRootView?.parent == null) {
+            keyguardRootView = findViewByIdName(root, context, "keyguard_root_view")
+        }
+        if (clockContainerView?.parent == null) {
+            clockContainerView = findViewByIdName(root, context, "keyguard_clock_container")
+        }
+        if (widgetHostView?.parent == null) {
+            widgetHostView = findViewByIdName(root, context, "nt_widget_host_view_container")
+                ?: findViewByIdName(root, context, "widgets_scroll_container")
+        }
+        if (sharedNotificationContainerView?.parent == null) {
+            sharedNotificationContainerView = findViewByIdName(root, context, "shared_notification_container")
+                ?: findDescendantByClassName(
+                    root,
+                    "com.android.systemui.statusbar.notification.stack.ui.view.SharedNotificationContainer"
+                )
+        }
+        if (notificationStackView?.parent == null) {
+            notificationStackView = findViewByIdName(root, context, "notification_stack_scroller")
+                ?: findDescendantByClassName(
+                    root,
+                    "com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout"
+                )
+        }
+    }
+
     private fun findDescendantByClassName(root: View, className: String): View? {
         if (root.javaClass.name == className) return root
         val group = root as? ViewGroup ?: return null
@@ -230,9 +249,11 @@ class DepthWallpaperHooks : BaseHook() {
     }
 
     private fun updateDepthClip() {
-        val container = depthContainer ?: return
+        val imageView = subjectImageView ?: return
         val root = rootWindowView ?: return
         if (root.width <= 0 || root.height <= 0) return
+        val context = systemUiContext ?: return
+        refreshTrackedViews(root, context)
 
         val rootLoc = IntArray(2)
         root.getLocationOnScreen(rootLoc)
@@ -249,19 +270,32 @@ class DepthWallpaperHooks : BaseHook() {
             view.getLocationOnScreen(loc)
             loc[1] - rootLoc[1]
         }
+        val widgetTop = widgetHostView
+            ?.takeIf { it.height > 0 && it.visibility == View.VISIBLE }
+            ?.let { view ->
+                val loc = IntArray(2)
+                view.getLocationOnScreen(loc)
+                loc[1] - rootLoc[1]
+            }
 
         if (notificationTop != null && notificationTop > 0) {
             clipBottom = minOf(clipBottom, notificationTop)
+        }
+        if (widgetTop != null && widgetTop > 0) {
+            clipBottom = minOf(clipBottom, widgetTop)
         }
         if (clockBottom != null) {
             clipBottom = maxOf(clipBottom, clockBottom)
         }
 
-        container.clipBounds = Rect(0, 0, root.width, clipBottom.coerceIn(1, root.height))
+        imageView.clipBounds = Rect(0, 0, root.width, clipBottom.coerceIn(1, root.height))
     }
 
     private fun updateDepthLayering() {
         val container = depthContainer ?: return
+        val root = rootWindowView ?: return
+        val context = systemUiContext ?: return
+        refreshTrackedViews(root, context)
         val keyguardRoot = keyguardRootView
         val notifications = sharedNotificationContainerView
 
@@ -1210,6 +1244,7 @@ class DepthWallpaperHooks : BaseHook() {
         @Volatile var rootWindowView: ViewGroup? = null
         @Volatile var keyguardRootView: View? = null
         @Volatile var clockContainerView: View? = null
+        @Volatile var widgetHostView: View? = null
         @Volatile var sharedNotificationContainerView: View? = null
         @Volatile var notificationStackView: View? = null
         @Volatile var scrimControllerInstance: Any? = null
