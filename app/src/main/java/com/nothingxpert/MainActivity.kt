@@ -1,5 +1,7 @@
 package com.nothingxpert
 
+import com.google.android.material.color.DynamicColors
+
 import android.animation.ArgbEvaluator
 import android.animation.ValueAnimator
 import android.app.ActivityManager
@@ -92,6 +94,7 @@ class MainActivity : BaseActivity() {
     @Volatile private var restarting = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        DynamicColors.applyToActivitiesIfAvailable(this.application)
         super.onCreate(savedInstanceState)
 
         // Enable edge-to-edge display
