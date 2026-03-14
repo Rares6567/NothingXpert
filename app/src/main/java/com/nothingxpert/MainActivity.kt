@@ -303,12 +303,16 @@ class MainActivity : BaseActivity() {
     private fun restartSystemUI() {
         try {
             val process = Runtime.getRuntime().exec("su")
-            val os = DataOutputStream(process.outputStream)
-            os.writeBytes("killall com.android.systemui\n")
-            os.writeBytes("exit\n")
-            os.flush()
-            os.close()
-            process.waitFor()
+            try {
+                val os = DataOutputStream(process.outputStream)
+                os.writeBytes("killall com.android.systemui\n")
+                os.writeBytes("exit\n")
+                os.flush()
+                os.close()
+                process.waitFor()
+            } finally {
+                process.destroy()
+            }
             // Schedule app auto-restart in background, then kill this process
             PrefsUtil.ensurePrefsAccessible(this)
             scheduleSelfRestart(1200)
