@@ -1,17 +1,14 @@
 package com.nothingxpert.hooks
 
-import android.content.Context
-import android.content.Intent
 import android.os.Handler
 import android.os.Looper
 import android.view.View
 import android.view.ViewGroup
-import android.view.WindowInsets
 import android.view.inputmethod.EditorInfo
-import androidx.core.content.ContextCompat
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
+import com.nothingxpert.HookEntry
 import java.util.concurrent.atomic.AtomicBoolean
 
 class NavbarHooks : BaseHook() {
@@ -23,45 +20,10 @@ class NavbarHooks : BaseHook() {
     override fun install(lpparam: XC_LoadPackage.LoadPackageParam) {
         when (lpparam.packageName) {
             SYSTEMUI_PKG -> installHideNavbarHook(lpparam)
-            GBOARD_PKG -> installHideImeBarHook(lpparam)
+            HookEntry.GBOARD_PKG -> installHideImeBarHook(lpparam)
         }
     }
-    
-    fun installImeToggleReceiver() {
-        if (imeReceiverRegistered) return
-        val ctx = getSystemContext() ?: return
-        try {
-            val filter = android.content.IntentFilter(ACTION_IME_BAR_TOGGLED)
-            val receiver = object : android.content.BroadcastReceiver() {
-                override fun onReceive(context: Context?, intent: Intent?) {
-                    if (intent?.action != ACTION_IME_BAR_TOGGLED) return
-                    forceStopPackage(ctx, GBOARD_PKG)
-                }
-            }
-            ContextCompat.registerReceiver(
-                ctx,
-                receiver,
-                filter,
-                ContextCompat.RECEIVER_EXPORTED
-            )
-            imeReceiverRegistered = true
-            log("IME toggle receiver registered")
-        } catch (t: Throwable) {
-            log("Failed to register IME toggle receiver: $t")
-        }
-    }
-    
-    private fun forceStopPackage(context: Context, pkg: String) {
-        try {
-            val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager ?: return
-            val method = am.javaClass.getMethod("forceStopPackage", String::class.java)
-            method.invoke(am, pkg)
-            log("force-stopped $pkg")
-        } catch (t: Throwable) {
-            log("force-stop failed for $pkg: $t")
-        }
-    }
-    
+
     private fun installHideNavbarHook(lpparam: XC_LoadPackage.LoadPackageParam) {
         if (!ENABLE_HIDE_NAVBAR) return
 
@@ -424,11 +386,7 @@ class NavbarHooks : BaseHook() {
             "android.inputmethodservice.InputMethodService"
         )
 
-        private const val GBOARD_PKG = "com.google.android.inputmethod.latin"
         private const val PREF_HIDE_IME_BAR = "pref_hide_ime_bar"
-        private const val ACTION_IME_BAR_TOGGLED = "com.nothingxpert.action.IME_BAR_TOGGLED"
         const val ENABLE_HIDE_NAVBAR = true
-
-        @Volatile var imeReceiverRegistered = false
     }
 }
