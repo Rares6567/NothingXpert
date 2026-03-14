@@ -2,6 +2,7 @@ package com.nothingxpert
 
 import android.app.Application
 import android.content.Context
+import com.google.android.material.color.DynamicColors
 
 class NothingXpertApp : Application() {
 
@@ -11,6 +12,7 @@ class NothingXpertApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        DynamicColors.applyToActivitiesIfAvailable(this)
         // Ensure locale is set
         LocaleHelper.setLocale(this)
     }
