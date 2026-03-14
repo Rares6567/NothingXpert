@@ -3,7 +3,7 @@
     <style name="Theme.NothingXpert" parent="Theme.Material3.DayNight.NoActionBar">
         <!-- Window layout -->
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>
-        <item name="android:windowBackground">?attr/colorSurfaceContainer</item>
+        
         <item name="android:colorBackground">?attr/colorSurfaceContainer</item>
 
         <!-- App theme -->
