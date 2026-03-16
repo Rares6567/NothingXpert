@@ -26,7 +26,8 @@ class HookEntry : IXposedHookLoadPackage, XPrefs.OnPreferenceUpdateListener {
         NotificationHooks(),
         SystemHooks(),
         FloatingWindowHooks(),
-        DepthWallpaperHooks()
+        DepthWallpaperHooks(),
+        QsBlurHooks()
     )
     
     override fun handleLoadPackage(lpparam: XC_LoadPackage.LoadPackageParam) {
@@ -104,6 +105,9 @@ class HookEntry : IXposedHookLoadPackage, XPrefs.OnPreferenceUpdateListener {
             key == DepthWallpaperHooks.PREF_DEPTH_IMAGE ||
             key == DepthWallpaperHooks.PREF_DEPTH_OPACITY) {
             DepthWallpaperHooks.refreshFromPrefs()
+        }
+        if (key == QsBlurHooks.PREF_QS_BLUR_ENABLED) {
+            QsBlurHooks.refreshFromPrefs()
         }
     }
     

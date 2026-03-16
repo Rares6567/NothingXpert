@@ -61,6 +61,9 @@
     <string name="pref_category_notifications">Notifications</string>
     <string name="pref_unobtrusive_notifs_screen_on_title">Unobtrusive notifications (screen on)</string>
     <string name="pref_unobtrusive_notifs_screen_on_summary">Silence notification sound and vibration while the screen is on and unlocked</string>
+    <string name="pref_category_quick_settings">Quick Settings</string>
+    <string name="pref_qs_blur_title">Blur Quick Settings</string>
+    <string name="pref_qs_blur_summary">Apply the system shade blur behind Quick Settings while you pull it down</string>
 
     <string name="app_lock_button">App Lock</string>
 
