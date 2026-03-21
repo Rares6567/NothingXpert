@@ -19,7 +19,7 @@ class RemotePrefProvider : RemotePreferenceProvider(
         if (caller != null) {
             return when (caller) {
                 appPackage -> true
-                SYSTEMUI_PACKAGE, SYSTEM_SERVER_PACKAGE -> !write
+                SYSTEMUI_PACKAGE, SYSTEM_SERVER_PACKAGE, LAUNCHER_PACKAGE -> !write
                 else -> false
             }
         }
@@ -28,7 +28,9 @@ class RemotePrefProvider : RemotePreferenceProvider(
         val packages = ctx.packageManager.getPackagesForUid(callingUid).orEmpty().toSet()
         if (packages.contains(appPackage)) return true
         if (write) return false
-        return packages.contains(SYSTEMUI_PACKAGE) || packages.contains(SYSTEM_SERVER_PACKAGE)
+        return packages.contains(SYSTEMUI_PACKAGE) ||
+            packages.contains(SYSTEM_SERVER_PACKAGE) ||
+            packages.contains(LAUNCHER_PACKAGE)
     }
 
     @Throws(FileNotFoundException::class)
@@ -88,13 +90,17 @@ class RemotePrefProvider : RemotePreferenceProvider(
         val appPackage = ctx.packageName
         val caller = callingPackage
         if (caller != null) {
-            return caller == appPackage || caller == SYSTEMUI_PACKAGE || caller == SYSTEM_SERVER_PACKAGE
+            return caller == appPackage ||
+                caller == SYSTEMUI_PACKAGE ||
+                caller == SYSTEM_SERVER_PACKAGE ||
+                caller == LAUNCHER_PACKAGE
         }
         val callingUid = Binder.getCallingUid()
         val packages = ctx.packageManager.getPackagesForUid(callingUid).orEmpty().toSet()
         return packages.contains(appPackage) ||
             packages.contains(SYSTEMUI_PACKAGE) ||
-            packages.contains(SYSTEM_SERVER_PACKAGE)
+            packages.contains(SYSTEM_SERVER_PACKAGE) ||
+            packages.contains(LAUNCHER_PACKAGE)
     }
 
     private fun canWriteFromCaller(): Boolean {
@@ -122,6 +128,7 @@ class RemotePrefProvider : RemotePreferenceProvider(
         const val DEPTH_SUBJECT_VERSION_PARAM = "v"
         private const val SYSTEMUI_PACKAGE = "com.android.systemui"
         private const val SYSTEM_SERVER_PACKAGE = "android"
+        private const val LAUNCHER_PACKAGE = "com.nothing.launcher"
 
         fun buildDepthSubjectUri(version: Long): String {
             return Uri.Builder()

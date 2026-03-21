@@ -4,6 +4,7 @@
     <string-array name="module_scope">
         <item>android</item>
         <item>com.android.systemui</item>
+        <item>com.nothing.launcher</item>
         <item>com.google.android.inputmethod.latin</item>
     </string-array>
 
@@ -40,4 +41,5 @@
         <item>medium</item>
         <item>large</item>
     </string-array>
+
 </resources>

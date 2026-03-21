@@ -5,6 +5,8 @@ import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import androidx.preference.Preference
+import androidx.preference.SwitchPreferenceCompat
+import com.nothingxpert.hooks.LauncherHooks
 
 class MiscSettingsFragment : BasePreferenceFragment() {
 
@@ -51,8 +53,23 @@ class MiscSettingsFragment : BasePreferenceFragment() {
         preferenceManager.sharedPreferencesName = "${requireContext().packageName}_preferences"
         preferenceManager.sharedPreferencesMode = Context.MODE_PRIVATE
         setPreferencesFromResource(R.xml.misc_preferences, rootKey)
+        configureCommunityWidgetLimitPreference()
         PreferenceUtils.fixPermissions(requireContext())
         PrefsUtil.ensurePrefsAccessible(requireContext())
+    }
+
+    private fun configureCommunityWidgetLimitPreference() {
+        val pref = findPreference<SwitchPreferenceCompat>(LauncherHooks.PREF_EXPAND_COMMUNITY_WIDGET_LIMIT) ?: return
+        pref.setOnPreferenceChangeListener { _, newValue ->
+            val value = newValue as? Boolean ?: return@setOnPreferenceChangeListener false
+            val prefs = preferenceManager.sharedPreferences ?: return@setOnPreferenceChangeListener false
+            val saved = prefs.edit().putBoolean(LauncherHooks.PREF_EXPAND_COMMUNITY_WIDGET_LIMIT, value).commit()
+            if (saved && isAdded) {
+                PrefsUtil.ensurePrefsAccessible(requireContext())
+                PreferenceUtils.fixPermissions(requireContext())
+            }
+            saved
+        }
     }
 
     override fun onResume() {

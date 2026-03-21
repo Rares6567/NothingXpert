@@ -53,6 +53,7 @@ abstract class BaseHook {
             
             val paths = listOf(
                 "/data/user_de/0/$MODULE_PKG/shared_prefs/${MODULE_PKG}_preferences.xml",
+                "/data/user/0/$MODULE_PKG/shared_prefs/${MODULE_PKG}_preferences.xml",
                 "/data/data/$MODULE_PKG/shared_prefs/${MODULE_PKG}_preferences.xml"
             )
             

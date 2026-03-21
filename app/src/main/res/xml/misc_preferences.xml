@@ -32,6 +32,14 @@
             android:title="@string/pref_hide_ime_bar_title"
             app:iconSpaceReserved="false" />
 
+        <com.nothingxpert.ui.preferences.MaterialSwitchPreference
+            android:key="pref_expand_community_widget_limit"
+            android:title="@string/pref_expand_community_widget_limit_title"
+            android:summaryOn="@string/pref_expand_community_widget_limit_summary"
+            android:summaryOff="@string/pref_expand_community_widget_limit_summary"
+            android:defaultValue="false"
+            app:iconSpaceReserved="false" />
+
     </com.nothingxpert.ui.preferences.MaterialPreferenceCategory>
 
 	<com.nothingxpert.ui.preferences.MaterialPreferenceCategory

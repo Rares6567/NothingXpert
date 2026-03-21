@@ -22,6 +22,7 @@ class HookEntry : IXposedHookLoadPackage, XPrefs.OnPreferenceUpdateListener {
         VolumeHooks(),
         SecureFlagHooks(),
         NavbarHooks(),
+        LauncherHooks(),
         AppLockHooks(),
         NotificationHooks(),
         SystemHooks(),
@@ -41,7 +42,17 @@ class HookEntry : IXposedHookLoadPackage, XPrefs.OnPreferenceUpdateListener {
         // Store SystemUI classloader for tap position methods
         if (pkg == SYSTEMUI_PKG) {
             KeyguardHooks.systemUiClassLoader = lpparam.classLoader
-            initializeXPrefs(lpparam)
+            initializeXPrefs(
+                lpparam,
+                "com.android.systemui.SystemUIApplication"
+            )
+        }
+
+        if (pkg == LauncherHooks.NOTHING_LAUNCHER_PKG) {
+            initializeXPrefs(
+                lpparam,
+                "com.nothing.launcher.NTLauncherApplication"
+            )
         }
         
         // Install all hooks
@@ -59,10 +70,13 @@ class HookEntry : IXposedHookLoadPackage, XPrefs.OnPreferenceUpdateListener {
         }
     }
     
-    private fun initializeXPrefs(lpparam: XC_LoadPackage.LoadPackageParam) {
+    private fun initializeXPrefs(
+        lpparam: XC_LoadPackage.LoadPackageParam,
+        applicationClassName: String
+    ) {
         try {
             XposedHelpers.findAndHookMethod(
-                "com.android.systemui.SystemUIApplication",
+                applicationClassName,
                 lpparam.classLoader,
                 "onCreate",
                 object : XC_MethodHook() {

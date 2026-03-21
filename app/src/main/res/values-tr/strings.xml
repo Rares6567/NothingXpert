@@ -19,6 +19,8 @@
     <string name="pref_shake_torch_summary">Ekran kapalıyken telefonu sallayarak feneri aç veya kapat</string>
     <string name="pref_hide_ime_bar_title">Gboard boşluğunu kaldır</string>
     <string name="pref_hide_ime_bar_summary">Klavyenin üzerindeki dünya/ok şeridini kaldır</string>
+    <string name="pref_expand_community_widget_limit_title">Topluluk widget sınırını artır</string>
+    <string name="pref_expand_community_widget_limit_summary">Nothing Launcher ile en fazla 20 topluluk widget kullan</string>
     <string name="pref_double_tap_wake_title">Çift dokunuşla uyandır</string>
     <string name="pref_double_tap_wake_summary">Tek dokunuşla uyandırmayı devre dışı bırak ve çift dokunuş iste</string>
     <string name="app_lock_title">Uygulama Kilidi</string>
