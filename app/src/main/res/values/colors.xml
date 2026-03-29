@@ -2,6 +2,11 @@
 <resources>
     <color name="ic_launcher_background">#000000</color>
     <color name="color_background">#1C1B1F</color>
+
+    <!-- Glyph preview colors (Nothing-style) -->
+    <color name="glyph_bg_led_color">#15181E</color>
+    <color name="glyph_light_effect_preview_default_color">#CFD3DC</color>
+    <color name="glyph_light_effect_preview_select_color">#FFFFFF</color>
     
     <!-- Home Preferences Icon Color -->
     <color name="main_preference_color_1">#bde9ff</color>

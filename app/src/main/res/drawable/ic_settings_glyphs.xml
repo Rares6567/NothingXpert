@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Dot grid pattern representing glyph LEDs -->
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M12,2a2,2 0,1 1,0 4a2,2 0,1 1,0 -4z" />
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M12,9a1.5,1.5 0,1 1,0 3a1.5,1.5 0,1 1,0 -3z" />
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M5,7a1.5,1.5 0,1 1,0 3a1.5,1.5 0,1 1,0 -3z" />
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M19,7a1.5,1.5 0,1 1,0 3a1.5,1.5 0,1 1,0 -3z" />
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M12,14 L12,22"
+        android:strokeWidth="2.5"
+        android:strokeColor="@android:color/white"
+        android:strokeLineCap="round" />
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M7,17a1,1 0,1 1,0 2a1,1 0,1 1,0 -2z" />
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M17,17a1,1 0,1 1,0 2a1,1 0,1 1,0 -2z" />
+</vector>

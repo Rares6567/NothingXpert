@@ -159,6 +159,7 @@ class MainActivity : BaseActivity() {
         setupMiscCategory()
         setupStatusBarCategory()
         setupAppsCategory()
+        setupGlyphsCategory()
         setupRamMonitor()
         setupTabBar()
         setupLanguageCard()
@@ -237,6 +238,7 @@ class MainActivity : BaseActivity() {
         val miscCard = findViewById<View>(R.id.category_misc)
         val statusBarCard = findViewById<View>(R.id.category_status_bar)
         val appsCard = findViewById<View>(R.id.category_apps)
+        val glyphsCard = findViewById<View>(R.id.category_glyphs)
         
         // Start with invisible
         lockscreenCard.alpha = 0f
@@ -247,6 +249,8 @@ class MainActivity : BaseActivity() {
         statusBarCard.translationY = 50f
         appsCard.alpha = 0f
         appsCard.translationY = 50f
+        glyphsCard.alpha = 0f
+        glyphsCard.translationY = 50f
         
         // Animate lockscreen card
         lockscreenCard.animate()
@@ -281,6 +285,15 @@ class MainActivity : BaseActivity() {
             .translationY(0f)
             .setDuration(400)
             .setStartDelay(550)
+            .setInterpolator(android.view.animation.DecelerateInterpolator())
+            .start()
+
+        // Animate glyphs card with further stagger
+        glyphsCard.animate()
+            .alpha(1f)
+            .translationY(0f)
+            .setDuration(400)
+            .setStartDelay(650)
             .setInterpolator(android.view.animation.DecelerateInterpolator())
             .start()
     }
@@ -453,6 +466,33 @@ class MainActivity : BaseActivity() {
         // Click listener -> Apps hub
         categoryView.setOnClickListener {
             startActivity(Intent(this, AppsActivity::class.java))
+            applyBackAnimation()
+        }
+    }
+
+    private fun setupGlyphsCategory() {
+        val categoryView = findViewById<View>(R.id.category_glyphs)
+        
+        // Set icon
+        val iconView = categoryView.findViewById<ImageView>(R.id.category_icon)
+        iconView.setImageResource(R.drawable.ic_settings_glyphs)
+        
+        // Use pink color scheme (set 3)
+        val bgColor = ContextCompat.getColor(this, R.color.main_preference_color_3)
+        val iconColor = ContextCompat.getColor(this, R.color.main_preference_on_color_3)
+        iconView.background.setTintList(ColorStateList.valueOf(bgColor))
+        iconView.imageTintList = ColorStateList.valueOf(iconColor)
+        
+        // Set title and summary
+        val titleView = categoryView.findViewById<TextView>(R.id.category_title)
+        titleView.text = getString(R.string.pref_category_glyphs).uppercase()
+        
+        val summaryView = categoryView.findViewById<TextView>(R.id.category_summary)
+        summaryView.visibility = View.GONE
+        
+        // Click listener -> Glyphs hub
+        categoryView.setOnClickListener {
+            startActivity(Intent(this, GlyphsActivity::class.java))
             applyBackAnimation()
         }
     }
@@ -986,6 +1026,7 @@ class MainActivity : BaseActivity() {
         applyFontToViewGroup(findViewById(R.id.category_misc), typeface, isTurkish, 26f)
         applyFontToViewGroup(findViewById(R.id.category_status_bar), typeface, isTurkish, 26f)
         applyFontToViewGroup(findViewById(R.id.category_apps), typeface, isTurkish, 26f)
+        applyFontToViewGroup(findViewById(R.id.category_glyphs), typeface, isTurkish, 26f)
         
         // Apply to Options section (with larger size for Turkish)
         applyFontToViewGroup(findViewById(R.id.section_options), typeface, isTurkish, 26f)

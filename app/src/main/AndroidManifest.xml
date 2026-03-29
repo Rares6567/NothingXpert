@@ -1,11 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <uses-permission android:name="android.permission.USE_FINGERPRINT" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="com.nothing.ketchum.permission.ENABLE" />
+
+    <uses-sdk tools:overrideLibrary="com.nothing.thirdparty" />
 
     <!-- Signature-level permission for secure app-lock broadcasts -->
     <permission
@@ -46,6 +50,11 @@
         <meta-data
             android:name="com.google.mlkit.vision.DEPENDENCIES"
             android:value="subject_segment" />
+
+        <!-- Glyph SDK test key (debug mode enabled via root) -->
+        <meta-data
+            android:name="NothingKey"
+            android:value="test" />
 
         <activity
             android:name=".MainActivity"
@@ -102,6 +111,27 @@
             android:launchMode="singleTop"
             android:taskAffinity="com.nothingxpert.lock"
             android:finishOnTaskLaunch="true" />
+
+        <activity
+            android:name=".GlyphsActivity"
+            android:exported="false"
+            android:label="@string/pref_category_glyphs"
+            android:configChanges="locale|layoutDirection" />
+
+        <activity
+            android:name=".GlyphNotifSettingsActivity"
+            android:exported="false"
+            android:label="@string/glyph_notif_title"
+            android:configChanges="locale|layoutDirection" />
+
+        <service
+            android:name=".GlyphNotificationService"
+            android:exported="true"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
 
         <provider
             android:name=".RemotePrefProvider"

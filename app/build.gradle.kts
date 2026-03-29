@@ -57,6 +57,7 @@ android {
 
 dependencies {
 	compileOnly(files("lib/api-82.jar"))
+	implementation(files("lib/glyph-matrix-sdk-2.0.aar"))
 
 	implementation("androidx.appcompat:appcompat:1.6.1")
 	implementation("androidx.core:core-ktx:1.12.0")

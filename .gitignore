@@ -10,3 +10,6 @@ captures/
 app/build
 .gradle/
 app/keystore.properties
+.vscode
+local.properties
+

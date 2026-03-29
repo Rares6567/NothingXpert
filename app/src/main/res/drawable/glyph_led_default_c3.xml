@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector android:height="47.0dip" android:width="7.0dip" android:viewportWidth="7.0" android:viewportHeight="47.0"
+  xmlns:android="http://schemas.android.com/apk/res/android">
+    <path android:fillColor="@color/glyph_light_effect_preview_default_color" android:pathData="M0.318,43.52V3.211C0.318,1.57 1.649,0.24 3.29,0.24C4.93,0.241 6.26,1.571 6.26,3.211V43.52C6.26,45.161 4.93,46.491 3.288,46.49C1.647,46.49 0.318,45.16 0.318,43.52Z" android:fillType="evenOdd" />
+</vector>

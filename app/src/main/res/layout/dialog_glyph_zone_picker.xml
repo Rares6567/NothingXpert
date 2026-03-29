@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="24dp">
+
+    <TextView
+        android:id="@+id/dialog_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/glyph_notif_select_zones"
+        android:textColor="?attr/colorOnSurface"
+        android:textSize="22sp"
+        android:fontFamily="@font/ndot57"
+        android:textStyle="bold"
+        android:gravity="center" />
+
+    <com.nothingxpert.ui.GlyphZoneView
+        android:id="@+id/glyph_zone_view"
+        android:layout_width="match_parent"
+        android:layout_height="400dp"
+        android:layout_marginTop="16dp" />
+
+    <TextView
+        android:id="@+id/selected_zones_label"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:textColor="?attr/colorPrimary"
+        android:textSize="13sp"
+        android:fontFamily="@font/ndot57"
+        android:gravity="center" />
+
+</LinearLayout>

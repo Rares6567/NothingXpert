@@ -121,4 +121,53 @@
     <string name="volume_action_play_pause">Play/Pause media</string>
     <string name="volume_action_next">Next track</string>
     <string name="volume_action_previous">Previous track</string>
+
+    <!-- Glyphs -->
+    <string name="pref_category_glyphs">Glyphs</string>
+    <string name="glyphs_category_summary">Glyph LED notification controls</string>
+    <string name="glyphs_device_detected">Detected: %1$s</string>
+    <string name="glyphs_device_testing_as">Testing as: %1$s</string>
+    <string name="glyphs_device_unsupported">Unsupported device — Glyphs require Nothing Phone (1) or (2)</string>
+    <string name="glyphs_device_phone1">Nothing Phone (1)</string>
+    <string name="glyphs_device_phone2">Nothing Phone (2)</string>
+    <string name="glyphs_test_model_title">Glyph Model Override (Test)</string>
+    <string name="glyphs_test_model_auto">Auto (detected device)</string>
+    <string name="glyphs_test_model_applied">Glyph model set to %1$s</string>
+
+    <!-- Glyph Per-App Notification -->
+    <string name="glyph_notif_title">Per App Glyph Notification</string>
+    <string name="glyph_notif_summary">Light up glyph zones when a notification arrives</string>
+    <string name="glyph_notif_enable">Enable glyph notifications</string>
+    <string name="glyph_notif_enable_summary">Activate glyphs when notifications arrive with screen off</string>
+    <string name="glyph_notif_duration_title">Glyph duration</string>
+    <string name="glyph_notif_duration_format">%1$d seconds</string>
+    <string name="glyph_notif_add_app">Add app</string>
+    <string name="glyph_notif_no_mappings">No apps configured yet.\nTap + to add an app.</string>
+    <string name="glyph_notif_mapping_deleted">Mapping removed</string>
+    <string name="glyph_notif_select_zones">Select glyph zones</string>
+    <string name="glyph_notif_select_app">Select an app</string>
+    <string name="glyph_notif_no_zones_selected">Please select at least one zone</string>
+    <string name="glyph_notif_app_already_mapped">This app is already configured</string>
+    <string name="glyph_notif_search_hint">Search apps…</string>
+
+    <!-- Glyph Zone Names - Phone 1 -->
+    <string name="glyph_zone_p1_camera">Camera</string>
+    <string name="glyph_zone_p1_diagonal">Diagonal</string>
+    <string name="glyph_zone_p1_battery">Battery</string>
+    <string name="glyph_zone_p1_center">Center</string>
+    <string name="glyph_zone_p1_bottom">Bottom</string>
+
+    <!-- Glyph Zone Names - Phone 2 -->
+    <string name="glyph_zone_p2_top_left">Top Left</string>
+    <string name="glyph_zone_p2_top_right">Top Right</string>
+    <string name="glyph_zone_p2_camera">Camera</string>
+    <string name="glyph_zone_p2_strip">Strip</string>
+    <string name="glyph_zone_p2_curve">Curve</string>
+    <string name="glyph_zone_p2_usb">USB</string>
+    <string name="glyph_zone_p2_bottom">Bottom</string>
+
+    <!-- Notification Access -->
+    <string name="glyph_notif_access_title">Notification access required</string>
+    <string name="glyph_notif_access_summary">Grant notification access to detect incoming notifications</string>
+    <string name="glyph_notif_access_button">Open Settings</string>
 </resources>
