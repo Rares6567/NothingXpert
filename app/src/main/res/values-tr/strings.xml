@@ -1,26 +1,26 @@
 <resources>
     <string name="app_name">NothingXpert</string>
-    <string name="xposed_description">NothingOS kilit ekranında tek dokunuşla uyku modunu etkinleştirir.</string>
-    <string name="status_text">Tek dokunuşla uyku, SystemUI LSPosed kancası tarafından yönetilir.</string>
+    <string name="xposed_description">NothingOS kilit ekranına tek dokunuşla uyutma özelliği ekler.</string>
+    <string name="status_text">Tek dokunuşla uyutma, SystemUI içindeki LSPosed kancasıyla yönetilir.</string>
     <string name="pref_category_lockscreen">Kilit Ekranı</string>
-    <string name="lockscreen_category_summary">Tek dokunuşla uyku ve diğer kilit ekranı ayarları</string>
-    <string name="pref_single_tap_sleep_title">Tek dokunuşla uyku</string>
+    <string name="lockscreen_category_summary">Tek dokunuşla uyutma ve diğer kilit ekranı iyileştirmeleri</string>
+    <string name="pref_single_tap_sleep_title">Tek dokunuşla uyut</string>
     <string name="pref_single_tap_sleep_summary">Kilit ekranında tek dokunuşla ekranı kapat</string>
     <string name="pref_shuffle_pin_title">PIN tuşlarını karıştır</string>
-    <string name="pref_shuffle_pin_summary">Kilit ekranında PIN tuş takımı düzenini rastgele yap</string>
+    <string name="pref_shuffle_pin_summary">Kilit ekranında PIN tuş takımının düzenini rastgele yap</string>
     <string name="general_on">Açık</string>
     <string name="general_off">Kapalı</string>
-    <string name="restart_systemui">SystemUI Yeniden Başlat</string>
+    <string name="restart_systemui">SystemUI\'ı Yeniden Başlat</string>
     <string name="pref_category_misc">Çeşitli</string>
-    <string name="misc_category_summary">Diğer ayarlar ve özelleştirmeler</string>
+    <string name="misc_category_summary">Diğer iyileştirmeler ve özelleştirmeler</string>
     <string name="pref_allow_secure_title">Kısıtlı içerikten ekran görüntüsüne izin ver</string>
-    <string name="pref_allow_secure_summary">Güvenli bayrağı kaldırarak engellenen yerlerde ekran görüntüleri ve kayıtların çalışmasını sağla</string>
+    <string name="pref_allow_secure_summary">Güvenli bayrağı kaldırarak engellenen yerlerde ekran görüntüsü ve kayıt alınmasını sağla</string>
     <string name="pref_shake_torch_title">Sallayarak feneri aç/kapat</string>
     <string name="pref_shake_torch_summary">Ekran kapalıyken telefonu sallayarak feneri aç veya kapat</string>
     <string name="pref_hide_ime_bar_title">Gboard boşluğunu kaldır</string>
     <string name="pref_hide_ime_bar_summary">Klavyenin üzerindeki dünya/ok şeridini kaldır</string>
     <string name="pref_expand_community_widget_limit_title">Topluluk widget sınırını artır</string>
-    <string name="pref_expand_community_widget_limit_summary">Nothing Launcher ile en fazla 20 topluluk widget kullan</string>
+    <string name="pref_expand_community_widget_limit_summary">Nothing Launcher için en fazla 20 topluluk widget\'ına izin ver</string>
     <string name="pref_double_tap_wake_title">Çift dokunuşla uyandır</string>
     <string name="pref_double_tap_wake_summary">Tek dokunuşla uyandırmayı devre dışı bırak ve çift dokunuş iste</string>
     <string name="app_lock_title">Uygulama Kilidi</string>
@@ -48,7 +48,7 @@
     <string name="tab_main">Ana</string>
     <string name="tab_options">Seçenekler</string>
     <string name="pref_category_apps">Uygulamalar</string>
-    <string name="apps_category_summary">Uygulama Kilidi ve diğer uygulama ayarları</string>
+    <string name="apps_category_summary">Uygulama kilidi ve diğer uygulama odaklı iyileştirmeler</string>
     <string name="options_menu_title">Seçenekler</string>
     <string name="options_menu_subtitle">Bölümlere hızlı erişim</string>
     <string name="option_amoled_title">AMOLED Teması</string>
@@ -58,7 +58,7 @@
     <string name="pref_category_status_bar">Durum Çubuğu</string>
     <string name="status_bar_category_summary">Durum çubuğu hareketleri ve özelleştirmeleri</string>
     <string name="pref_category_gestures">Hareketler</string>
-    <string name="pref_status_bar_double_tap_title">Çift dokunuşla uyku</string>
+    <string name="pref_status_bar_double_tap_title">Çift dokunuşla uyut</string>
     <string name="pref_status_bar_double_tap_summary">Durum çubuğuna çift dokunarak ekranı kapat</string>
     <string name="pref_category_notifications">Bildirimler</string>
     <string name="pref_unobtrusive_notifs_screen_on_title">Ekran açıkken sessiz bildirim</string>
@@ -68,8 +68,8 @@
 
     <!-- Undismissable Notifications -->
     <string name="pref_undismissable_notifs_title">Kapatılamaz Bildirimler</string>
-    <string name="pref_undismissable_notifs_summary">Bildirimleri kapatılamayan uygulamaları seç</string>
-    <string name="pref_undismissable_notifs_picker_summary">Kaydırarak kapatılamayan bildirimler gösterilecek uygulamaları seç</string>
+    <string name="pref_undismissable_notifs_summary">Bildirimleri kaydırılarak kapatılamayan uygulamaları seç</string>
+    <string name="pref_undismissable_notifs_picker_summary">Kapatılamayan bildirim göstermesi gereken uygulamaları seçin</string>
     <string name="undismissable_notifs_filter_all">Tüm uygulamalar gösteriliyor</string>
     <string name="undismissable_notifs_filter_selected">Sadece seçili uygulamalar gösteriliyor</string>
 
@@ -81,7 +81,6 @@
     <string name="floating_window_size_small">Küçük</string>
     <string name="floating_window_size_medium">Orta</string>
     <string name="floating_window_size_large">Büyük</string>
-
     <!-- Language -->
     <string name="pref_category_language">Dil</string>
     <string name="language_category_summary">Uygulama dilini değiştir</string>
@@ -93,17 +92,81 @@
 
     <!-- Hardcoded strings that were missing -->
     <string name="toast_systemui_restarting">SystemUI yeniden başlatılıyor…</string>
-    <string name="toast_systemui_restart_failed">SystemUI yeniden başlatma başarısız: %1$s</string>
-    <string name="biometric_unlock_title">Uygulamanın Kilidini Aç</string>
-    <string name="biometric_unlock_subtitle">Açmak için kimlik doğrula</string>
-    <string name="app_lock_locked_text">Nothing Xpert tarafından kilitlendi</string>
+    <string name="toast_systemui_restart_failed">SystemUI yeniden başlatılamadı: %1$s</string>
+    <string name="biometric_unlock_title">Uygulama Kilidini Aç</string>
+    <string name="biometric_unlock_subtitle">Açmak için kimliğinizi doğrulayın</string>
+    <string name="app_lock_locked_text">NothingXpert tarafından kilitlendi</string>
     <string name="lockscreen_locked_text">Kilitli</string>
+
+    <!-- Depth Wallpaper -->
+    <string name="pref_category_depth_wallpaper">Derinlik Efekti</string>
+    <string name="pref_depth_wallpaper_title">Derinlik efektini etkinleştir</string>
+    <string name="pref_depth_wallpaper_summary">Derinlik efekti için kilit ekranı duvar kağıdınızın üzerine bir ön plan katmanı ekleyin</string>
+    <string name="pref_depth_wallpaper_opacity_title">Konu opaklığı</string>
+    <string name="pref_depth_wallpaper_crop_title">Görünür konu yüksekliği (%)</string>
+    <string name="pref_depth_wallpaper_status_title">Bölümleme durumu</string>
+    <string name="pref_depth_wallpaper_status_disabled">Devre dışı</string>
+    <string name="pref_depth_wallpaper_status_ready">Konu ayrıştırıldı — kilit ekranında aktif</string>
+    <string name="pref_depth_wallpaper_extracting">Konu duvar kağıdından ayrıştırılıyor…</string>
+    <string name="pref_depth_wallpaper_no_wallpaper">Duvar kağıdı okunamadı (canlı duvar kağıtları desteklenmiyor olabilir)</string>
+    <string name="pref_depth_wallpaper_no_subject">Duvar kağıdında konu tespit edilemedi</string>
+    <string name="pref_depth_wallpaper_subject_extracted">Konu başarıyla ayrıştırıldı</string>
+    <string name="pref_depth_wallpaper_extraction_failed">Konu ayrıştırılamadı — Google Play Hizmetlerini kontrol edin</string>
 
     <!-- Volume action entries -->
     <string name="volume_action_default">Varsayılan (ses değişimi)</string>
-    <string name="volume_action_none">Hiçbir şey yapma</string>
+    <string name="volume_action_none">Bir şey yapma</string>
     <string name="volume_action_flashlight">Feneri aç/kapat</string>
-    <string name="volume_action_play_pause">Medyayı Oynat/Duraklat</string>
+    <string name="volume_action_play_pause">Medyayı oynat/duraklat</string>
     <string name="volume_action_next">Sonraki parça</string>
     <string name="volume_action_previous">Önceki parça</string>
+
+    <!-- Glyphs -->
+    <string name="pref_category_glyphs">Glyphs</string>
+    <string name="glyphs_category_summary">Glyph LED bildirim kontrolleri</string>
+    <string name="glyphs_device_detected">Tespit edilen: %1$s</string>
+    <string name="glyphs_device_testing_as">Test edilen model: %1$s</string>
+    <string name="glyphs_device_unsupported">Desteklenmeyen cihaz — Glyphler için Nothing Phone (1) veya (2) gereklidir</string>
+    <string name="glyphs_device_phone1">Nothing Phone (1)</string>
+    <string name="glyphs_device_phone2">Nothing Phone (2)</string>
+    <string name="glyphs_test_model_title">Glyph Model Geçersiz Kılma (Test)</string>
+    <string name="glyphs_test_model_auto">Otomatik (tespit edilen cihaz)</string>
+    <string name="glyphs_test_model_applied">Glyph modeli %1$s olarak ayarlandı</string>
+
+    <!-- Glyph Per-App Notification -->
+    <string name="glyph_notif_title">Uygulama Başına Glyph Bildirimi</string>
+    <string name="glyph_notif_summary">Bildirim geldiğinde Glyph bölgelerini yak</string>
+    <string name="glyph_notif_enable">Glyph bildirimlerini etkinleştir</string>
+    <string name="glyph_notif_enable_summary">Ekran kapalıyken bildirim geldiğinde Glyphleri aktifleştir</string>
+    <string name="glyph_notif_duration_title">Glyph süresi</string>
+    <string name="glyph_notif_duration_format">%1$d saniye</string>
+    <string name="glyph_notif_add_app">Uygulama ekle</string>
+    <string name="glyph_notif_no_mappings">Henüz uygulama yapılandırılmadı.\nUygulama eklemek için + simgesine dokunun.</string>
+    <string name="glyph_notif_mapping_deleted">Eşleme kaldırıldı</string>
+    <string name="glyph_notif_select_zones">Glyph bölgelerini seçin</string>
+    <string name="glyph_notif_select_app">Bir uygulama seçin</string>
+    <string name="glyph_notif_no_zones_selected">Lütfen en az bir bölge seçin</string>
+    <string name="glyph_notif_app_already_mapped">Bu uygulama zaten yapılandırılmış</string>
+    <string name="glyph_notif_search_hint">Uygulamalarda ara…</string>
+
+    <!-- Glyph Zone Names - Phone 1 -->
+    <string name="glyph_zone_p1_camera">Kamera</string>
+    <string name="glyph_zone_p1_diagonal">Diyagonal</string>
+    <string name="glyph_zone_p1_battery">Pil</string>
+    <string name="glyph_zone_p1_center">Merkez</string>
+    <string name="glyph_zone_p1_bottom">Alt</string>
+
+    <!-- Glyph Zone Names - Phone 2 -->
+    <string name="glyph_zone_p2_top_left">Sol Üst</string>
+    <string name="glyph_zone_p2_top_right">Sağ Üst</string>
+    <string name="glyph_zone_p2_camera">Kamera</string>
+    <string name="glyph_zone_p2_strip">Şerit</string>
+    <string name="glyph_zone_p2_curve">Kavis</string>
+    <string name="glyph_zone_p2_usb">USB</string>
+    <string name="glyph_zone_p2_bottom">Alt</string>
+
+    <!-- Notification Access -->
+    <string name="glyph_notif_access_title">Bildirim erişimi gerekli</string>
+    <string name="glyph_notif_access_summary">Gelen bildirimleri algılamak için bildirim erişimi izni verin</string>
+    <string name="glyph_notif_access_button">Ayarları Aç</string>
 </resources>
