@@ -7,6 +7,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
+import android.os.SystemClock
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
@@ -16,19 +17,27 @@ import com.nothing.ketchum.GlyphException
 import com.nothing.ketchum.GlyphFrame
 import com.nothing.ketchum.GlyphManager
 import com.nothingxpert.util.RootShell
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Listens for notifications and activates the corresponding Glyph LEDs
  * when the screen is off and the feature is enabled.
  *
  * Glyphs stay on until the notification is dismissed.
- * Uses root to auto-enable Glyph SDK debug mode.
+ * Uses root to temporarily toggle Glyph SDK debug mode while actively controlling Glyphs.
  */
 class GlyphNotificationService : NotificationListenerService() {
 
     companion object {
         private const val TAG = "GlyphNotifService"
+        private const val KETCHUM_PKG = "com.nothing.ketchum"
         private const val DEBUG_ENABLE_CMD = "settings put global nt_glyph_interface_debug_enable 1"
+        private const val DEBUG_DISABLE_CMD = "settings put global nt_glyph_interface_debug_enable 0"
+        private const val ESSENTIAL_LIST_CMD = "dumpsys notification --noredact | grep 'AppSettings:' | grep 'essential=true'"
+        private const val ESSENTIAL_REFRESH_INTERVAL_MS = 15 * 60 * 1000L
+        private const val ESSENTIAL_SYNC_REFRESH_TIMEOUT_MS = 8_000L
+        private const val ESSENTIAL_IN_FLIGHT_WAIT_MS = 1_500L
+        private const val ESSENTIAL_SYNC_RETRY_WINDOW_MS = 5_000L
 
         // Phone (1) channel constants.
         private const val CH_P1_A1 = 0
@@ -72,13 +81,53 @@ class GlyphNotificationService : NotificationListenerService() {
     // When all are dismissed, glyphs turn off
     private val activeNotifications = mutableMapOf<String, Set<String>>()
 
+    // Track active Essential notification keys separately.
+    // These do not directly drive custom frames unless another custom notification is active.
+    private val activeEssentialNotifications = mutableSetOf<String>()
+
     // Cache of package → zone set mappings for quick lookup
     @Volatile
     private var mappingsCache: Map<String, Set<String>>? = null
 
+    // Package label cache used for substitute app-name fallback matching.
+    private val appLabelCache = mutableMapOf<String, String>()
+
     // Temporary zones previewed from the picker dialog.
     @Volatile
     private var manualPreviewZones: Set<String>? = null
+
+    @Volatile
+    private var essentialPackages: Set<String> = emptySet()
+
+    @Volatile
+    private var lastEssentialPackagesRefreshMs: Long = 0L
+
+    @Volatile
+    private var lastEssentialSyncAttemptMs: Long = 0L
+
+    private val essentialRefreshInFlight = AtomicBoolean(false)
+
+    private val prefChangeListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        when (key) {
+            GlyphNotifSettingsActivity.PREF_GLYPH_NOTIF_MAPPINGS -> {
+                invalidateMappingsCache()
+                synchronized(activeNotifications) {
+                    activeNotifications.clear()
+                    activeEssentialNotifications.clear()
+                }
+                refreshGlyphs()
+            }
+            GlyphNotifSettingsActivity.PREF_GLYPH_NOTIF_ENABLED -> {
+                if (!prefs.getBoolean(GlyphNotifSettingsActivity.PREF_GLYPH_NOTIF_ENABLED, false)) {
+                    synchronized(activeNotifications) {
+                        activeNotifications.clear()
+                        activeEssentialNotifications.clear()
+                    }
+                    refreshGlyphs()
+                }
+            }
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -94,16 +143,26 @@ class GlyphNotificationService : NotificationListenerService() {
             prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
         }
 
-        // Enable Glyph debug mode via root
-        enableDebugMode()
+        // Clear any stale debug state at startup. We enable it lazily only while a session is active.
+        disableDebugModeAsync()
 
         // Initialize Glyph SDK
         initGlyphManager()
+
+        refreshEssentialPackagesAsync(force = true)
+
+        try {
+            prefs.registerOnSharedPreferenceChangeListener(prefChangeListener)
+        } catch (_: Exception) {}
     }
 
     override fun onDestroy() {
         Log.d(TAG, "Service destroyed")
+        try {
+            prefs.unregisterOnSharedPreferenceChangeListener(prefChangeListener)
+        } catch (_: Exception) {}
         activeNotifications.clear()
+        activeEssentialNotifications.clear()
         manualPreviewZones = null
         closeGlyphSession()
         glyphManager?.unInit()
@@ -114,13 +173,30 @@ class GlyphNotificationService : NotificationListenerService() {
         super.onDestroy()
     }
 
-    private fun enableDebugMode() {
+    private fun enableDebugModeSync() {
+        try {
+            val res = RootShell.exec(DEBUG_ENABLE_CMD)
+            if (res?.exitCode == 0) {
+                Log.d(TAG, "Glyph debug mode enabled via root")
+            } else {
+                Log.w(TAG, "Failed to enable glyph debug mode")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to enable glyph debug mode: ${e.message}")
+        }
+    }
+
+    private fun disableDebugModeAsync() {
         Thread {
             try {
-                RootShell.exec(DEBUG_ENABLE_CMD)
-                Log.d(TAG, "Glyph debug mode enabled via root")
+                val res = RootShell.exec(DEBUG_DISABLE_CMD)
+                if (res?.exitCode == 0) {
+                    Log.d(TAG, "Glyph debug mode disabled via root")
+                } else {
+                    Log.w(TAG, "Failed to disable glyph debug mode")
+                }
             } catch (e: Exception) {
-                Log.w(TAG, "Failed to enable glyph debug mode: ${e.message}")
+                Log.w(TAG, "Failed to disable glyph debug mode: ${e.message}")
             }
         }.start()
     }
@@ -164,7 +240,6 @@ class GlyphNotificationService : NotificationListenerService() {
                     }
                 }
             }
-            openGlyphSession()
         } catch (e: Exception) {
             Log.e(TAG, "Failed to register device: ${e.message}")
         }
@@ -190,6 +265,9 @@ class GlyphNotificationService : NotificationListenerService() {
             }
         } catch (e: GlyphException) {
             Log.e(TAG, "Failed to close glyph session: ${e.message}")
+        } finally {
+            // Do not keep Ketchum debug mode enabled while idle.
+            disableDebugModeAsync()
         }
     }
 
@@ -197,56 +275,139 @@ class GlyphNotificationService : NotificationListenerService() {
     //  Notification events
     // ════════════════════════════════════════
 
+    private fun suppressKetchumNotificationIfNeeded(sbn: StatusBarNotification): Boolean {
+        if (sbn.packageName != KETCHUM_PKG) return false
+
+        val key = sbn.key ?: return false
+        return try {
+            cancelNotification(key)
+            Log.d(TAG, "Suppressed Ketchum notification: key=$key")
+            true
+        } catch (t: Throwable) {
+            Log.w(TAG, "Failed to suppress Ketchum notification: ${t.message}")
+            false
+        }
+    }
+
+    private fun suppressExistingKetchumNotifications() {
+        val active = try {
+            super.getActiveNotifications()
+        } catch (_: Exception) {
+            null
+        } ?: return
+
+        for (sbn in active) {
+            suppressKetchumNotificationIfNeeded(sbn)
+        }
+    }
+
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         sbn ?: return
+
+        // Hide Ketchum foreground debug cards from the shade.
+        if (suppressKetchumNotificationIfNeeded(sbn)) return
 
         // Check if feature is enabled
         if (!prefs.getBoolean(GlyphNotifSettingsActivity.PREF_GLYPH_NOTIF_ENABLED, false)) return
 
-        // Check if screen is off
+        // Track screen state. Non-essential custom lighting is only when screen is off,
+        // but essential tracking should still work while screen is on.
         val pm = getSystemService(Context.POWER_SERVICE) as? PowerManager
-        if (pm?.isInteractive == true) return
+        val isScreenOn = pm?.isInteractive == true
 
-        // Look up glyph mapping for this package
-        val pkg = sbn.packageName ?: return
-        val zones = getMappingForPackage(pkg) ?: return
+        // Resolve mapped zones, including delegated/reposted notifications.
+        val resolved = resolveMappedZones(sbn)
+        if (resolved == null) {
+            val opPkg = try {
+                sbn.opPkg
+            } catch (_: Throwable) {
+                null
+            }
+            Log.d(
+                TAG,
+                "No mapping match for notif: host=${sbn.packageName} opPkg=$opPkg key=${sbn.key}"
+            )
+            return
+        }
+        val mappedPackage = resolved.first
+        val key = sbn.key ?: return
+
+        // Track Essential notifications so we can yield Glyph control to the system
+        // while Essential is active.
+        if (isEssentialPackage(mappedPackage)) {
+            synchronized(activeNotifications) {
+                activeEssentialNotifications.add(key)
+            }
+            if (!isScreenOn) {
+                refreshGlyphs()
+            }
+            Log.d(TAG, "Essential notification tracked: pkg=$mappedPackage key=$key screenOn=$isScreenOn")
+            return
+        }
+
+        if (isScreenOn) {
+            Log.d(TAG, "Skip notification while screen on: host=${sbn.packageName} key=${sbn.key}")
+            return
+        }
+
+        val zones = resolved.second
 
         // Track this notification
-        val key = sbn.key ?: return
         synchronized(activeNotifications) {
             activeNotifications[key] = zones
+        }
+
+        // If we missed an Essential post event (e.g., arrived while screen was on before tracking),
+        // recover currently active Essential notifications from the system snapshot.
+        if (activeEssentialNotifications.isEmpty()) {
+            syncActiveEssentialNotificationsFromSystem()
         }
 
         // Activate glyphs with all currently active zones merged
         refreshGlyphs()
 
-        Log.d(TAG, "Notification posted: $pkg (key=$key), zones=$zones")
+        Log.d(
+            TAG,
+            "Notification posted: host=${sbn.packageName}, mapped=$mappedPackage (key=$key), zones=$zones"
+        )
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification?) {
         sbn ?: return
         val key = sbn.key ?: return
 
-        val wasTracked: Boolean
+        val wasTrackedCustom: Boolean
+        val wasTrackedEssential: Boolean
         synchronized(activeNotifications) {
-            wasTracked = activeNotifications.remove(key) != null
+            wasTrackedCustom = activeNotifications.remove(key) != null
+            wasTrackedEssential = activeEssentialNotifications.remove(key)
         }
 
-        if (wasTracked) {
+        if (wasTrackedCustom || wasTrackedEssential) {
             refreshGlyphs()
-            Log.d(TAG, "Notification dismissed: ${sbn.packageName} (key=$key)")
+            Log.d(
+                TAG,
+                "Notification dismissed: ${sbn.packageName} (key=$key), custom=$wasTrackedCustom essential=$wasTrackedEssential"
+            )
         }
     }
 
     /**
-     * Rebuild the glyph frame from all active notifications and toggle or turn off.
+     * Rebuild glyph frame from active mapped notifications.
+     * Essential notifications are represented as a fixed indicator overlay (B1 / CAMERA).
      */
     private fun refreshGlyphs() {
+        syncActiveEssentialNotificationsFromSystem()
+
         val allZones: Set<String>
         synchronized(activeNotifications) {
             val activeZones = activeNotifications.values.flatten()
             val previewZones = manualPreviewZones ?: emptySet()
-            allZones = (activeZones + previewZones).toSet()
+            val merged = (activeZones + previewZones).toMutableSet()
+            if (activeEssentialNotifications.isNotEmpty()) {
+                merged.add(essentialOverlayZone())
+            }
+            allZones = merged.toSet()
         }
 
         if (allZones.isEmpty()) {
@@ -269,6 +430,240 @@ class GlyphNotificationService : NotificationListenerService() {
         return cache[packageName]
     }
 
+    private fun resolveMappedZones(sbn: StatusBarNotification): Pair<String, Set<String>>? {
+        val candidates = linkedSetOf<String>()
+
+        val hostPkg = sbn.packageName
+        if (!hostPkg.isNullOrBlank()) candidates.add(hostPkg)
+
+        val opPkg = try {
+            sbn.opPkg
+        } catch (_: Throwable) {
+            null
+        }
+        if (!opPkg.isNullOrBlank()) candidates.add(opPkg)
+
+        val uid = try {
+            sbn.uid
+        } catch (_: Throwable) {
+            -1
+        }
+        if (uid > 0) {
+            val uidPackages = try {
+                packageManager.getPackagesForUid(uid)?.toList().orEmpty()
+            } catch (_: Throwable) {
+                emptyList()
+            }
+            candidates.addAll(uidPackages)
+        }
+
+        val extras = sbn.notification?.extras
+        val extraPackageKeys = arrayOf(
+            "android.originatingPackage",
+            "android.sourcePackage",
+            "sourcePackage",
+            "source_package",
+            "originatingPackage",
+            "originating_package",
+            "package",
+            "pkg"
+        )
+
+        if (extras != null) {
+            for (key in extraPackageKeys) {
+                val maybePkg = extras.getString(key)
+                if (!maybePkg.isNullOrBlank()) {
+                    candidates.add(maybePkg)
+                }
+            }
+        }
+
+        for (candidate in candidates) {
+            val zones = getMappingForPackage(candidate)
+            if (zones != null) return candidate to zones
+        }
+
+        // If the source is marked as Essential but not explicitly mapped,
+        // still route it so refreshGlyphs can add the Essential overlay indicator.
+        val essentialCandidate = candidates.firstOrNull { isEssentialPackage(it) }
+        if (!essentialCandidate.isNullOrBlank()) {
+            return essentialCandidate to (getMappingForPackage(essentialCandidate) ?: emptySet())
+        }
+
+        val substituteAppName = (
+            extras?.getCharSequence("android.substName")
+                ?: extras?.getCharSequence("android.substituteAppName")
+            )?.toString()?.trim()
+
+        if (!substituteAppName.isNullOrEmpty()) {
+            val cache = mappingsCache ?: buildMappingsCache().also { mappingsCache = it }
+            for ((pkg, zones) in cache) {
+                val label = resolveAppLabel(pkg) ?: continue
+                if (label.equals(substituteAppName, ignoreCase = true)) {
+                    return pkg to zones
+                }
+            }
+
+            val essentialByLabel = essentialPackages.firstOrNull { pkg ->
+                resolveAppLabel(pkg)?.equals(substituteAppName, ignoreCase = true) == true
+            }
+            if (!essentialByLabel.isNullOrBlank()) {
+                return essentialByLabel to (getMappingForPackage(essentialByLabel) ?: emptySet())
+            }
+        }
+
+        if (hostPkg == "android" || hostPkg?.startsWith("com.nothing") == true) {
+            Log.d(
+                TAG,
+                "No mapping for delegated notif: host=$hostPkg opPkg=$opPkg candidates=$candidates subApp=$substituteAppName"
+            )
+        }
+
+        return null
+    }
+
+    private fun essentialOverlayZone(): String {
+        // Phone (2): B1 is CAMERA. Phone (1) also uses CAMERA as the closest equivalent segment.
+        return "CAMERA"
+    }
+
+    private fun waitForEssentialRefreshInFlight(maxWaitMs: Long) {
+        if (!essentialRefreshInFlight.get()) return
+
+        val deadline = SystemClock.elapsedRealtime() + maxWaitMs
+        while (essentialRefreshInFlight.get() && SystemClock.elapsedRealtime() < deadline) {
+            SystemClock.sleep(50L)
+        }
+    }
+
+    private fun refreshEssentialPackagesSync(timeoutMs: Long = ESSENTIAL_SYNC_REFRESH_TIMEOUT_MS): Boolean {
+        if (!essentialRefreshInFlight.compareAndSet(false, true)) return false
+
+        return try {
+            val res = RootShell.exec(ESSENTIAL_LIST_CMD, timeoutMs = timeoutMs)
+            if (res != null) {
+                essentialPackages = parseEssentialPackages(res.stdout)
+                lastEssentialPackagesRefreshMs = SystemClock.elapsedRealtime()
+                Log.d(TAG, "Essential package cache refreshed (sync): ${essentialPackages.size}")
+                true
+            } else {
+                Log.w(TAG, "Failed to refresh essential package cache (sync)")
+                false
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Essential package refresh error (sync): ${e.message}")
+            false
+        } finally {
+            essentialRefreshInFlight.set(false)
+        }
+    }
+
+    private fun isEssentialPackage(packageName: String?): Boolean {
+        if (packageName.isNullOrBlank()) return false
+
+        val cached = essentialPackages
+        if (cached.contains(packageName)) return true
+
+        if (cached.isEmpty()) {
+            // Startup race: avoid missing essential overlay while async warmup is still running.
+            waitForEssentialRefreshInFlight(ESSENTIAL_IN_FLIGHT_WAIT_MS)
+            if (essentialPackages.contains(packageName)) return true
+
+            val now = SystemClock.elapsedRealtime()
+            if (now - lastEssentialSyncAttemptMs >= ESSENTIAL_SYNC_RETRY_WINDOW_MS) {
+                lastEssentialSyncAttemptMs = now
+                if (refreshEssentialPackagesSync()) {
+                    if (essentialPackages.contains(packageName)) return true
+                }
+            }
+
+            refreshEssentialPackagesAsync(force = true)
+            return false
+        }
+
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastEssentialPackagesRefreshMs > ESSENTIAL_REFRESH_INTERVAL_MS) {
+            refreshEssentialPackagesAsync(force = false)
+        }
+        return false
+    }
+
+    private fun refreshEssentialPackagesAsync(force: Boolean) {
+        val now = SystemClock.elapsedRealtime()
+        if (!force && now - lastEssentialPackagesRefreshMs <= ESSENTIAL_REFRESH_INTERVAL_MS) return
+        if (!essentialRefreshInFlight.compareAndSet(false, true)) return
+
+        Thread {
+            try {
+                val res = RootShell.exec(ESSENTIAL_LIST_CMD, timeoutMs = 12_000L)
+                if (res != null) {
+                    essentialPackages = parseEssentialPackages(res.stdout)
+                    lastEssentialPackagesRefreshMs = SystemClock.elapsedRealtime()
+                    Log.d(TAG, "Essential package cache refreshed: ${essentialPackages.size}")
+                } else {
+                    Log.w(TAG, "Failed to refresh essential package cache")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Essential package refresh error: ${e.message}")
+            } finally {
+                essentialRefreshInFlight.set(false)
+            }
+        }.start()
+    }
+
+    private fun parseEssentialPackages(raw: String): Set<String> {
+        if (raw.isBlank()) return emptySet()
+
+        val regex = Regex("""AppSettings:\s+([A-Za-z0-9._]+)\s+\([0-9]+\).*?\bessential=true\b""")
+        val result = linkedSetOf<String>()
+
+        for (line in raw.lineSequence()) {
+            val pkg = regex.find(line)?.groupValues?.getOrNull(1)
+            if (!pkg.isNullOrBlank()) result.add(pkg)
+        }
+
+        return result
+    }
+
+    private fun syncActiveEssentialNotificationsFromSystem() {
+        val sbns = try {
+            super.getActiveNotifications()
+        } catch (_: Exception) {
+            null
+        } ?: return
+
+        val essentialKeys = linkedSetOf<String>()
+        for (sbn in sbns) {
+            val resolved = resolveMappedZones(sbn) ?: continue
+            if (isEssentialPackage(resolved.first)) {
+                val key = sbn.key
+                if (!key.isNullOrBlank()) essentialKeys.add(key)
+            }
+        }
+
+        synchronized(activeNotifications) {
+            activeEssentialNotifications.clear()
+            activeEssentialNotifications.addAll(essentialKeys)
+        }
+
+        if (essentialKeys.isNotEmpty()) {
+            Log.d(TAG, "Synced active essential notifications: ${essentialKeys.size}")
+        }
+    }
+
+    private fun resolveAppLabel(packageName: String): String? {
+        appLabelCache[packageName]?.let { return it }
+
+        return try {
+            val ai = packageManager.getApplicationInfo(packageName, 0)
+            val label = packageManager.getApplicationLabel(ai).toString()
+            appLabelCache[packageName] = label
+            label
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     private fun buildMappingsCache(): Map<String, Set<String>> {
         val rawMappings = prefs.getStringSet(
             GlyphNotifSettingsActivity.PREF_GLYPH_NOTIF_MAPPINGS, emptySet()
@@ -288,6 +683,7 @@ class GlyphNotificationService : NotificationListenerService() {
 
     fun invalidateMappingsCache() {
         mappingsCache = null
+        appLabelCache.clear()
     }
 
     private fun setManualPreviewZones(zones: Set<String>?) {
@@ -301,7 +697,7 @@ class GlyphNotificationService : NotificationListenerService() {
         if (!isServiceConnected) return
 
         if (!isSessionOpen) {
-            try { RootShell.exec(DEBUG_ENABLE_CMD) } catch (_: Exception) {}
+            enableDebugModeSync()
             openGlyphSession()
         }
         if (!isSessionOpen) return
@@ -315,6 +711,7 @@ class GlyphNotificationService : NotificationListenerService() {
             }
 
             val frame = builder.build()
+
             gm.toggle(frame)
 
             Log.d(TAG, "Glyphs activated for zones: $zones")
@@ -394,6 +791,10 @@ class GlyphNotificationService : NotificationListenerService() {
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to turn off glyphs: ${e.message}")
+        } finally {
+            // Release SDK control when idle so Nothing OS features (e.g. music visualizer)
+            // can acquire the Glyph session.
+            closeGlyphSession()
         }
     }
 
@@ -401,5 +802,21 @@ class GlyphNotificationService : NotificationListenerService() {
         super.onListenerConnected()
         Log.d(TAG, "Notification listener connected")
         invalidateMappingsCache()
+        handler.post {
+            suppressExistingKetchumNotifications()
+            syncActiveEssentialNotificationsFromSystem()
+            refreshGlyphs()
+        }
+    }
+
+    override fun onListenerDisconnected() {
+        super.onListenerDisconnected()
+        Log.d(TAG, "Notification listener disconnected")
+        synchronized(activeNotifications) {
+            activeNotifications.clear()
+            activeEssentialNotifications.clear()
+        }
+        manualPreviewZones = null
+        turnOffGlyphs()
     }
 }
