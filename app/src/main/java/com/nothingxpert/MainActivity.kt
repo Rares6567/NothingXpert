@@ -989,35 +989,35 @@ class MainActivity : BaseActivity() {
         
         // Apply to title views (with larger size for Turkish)
         findViewById<TextView>(R.id.title_nothing)?.apply {
-            this.typeface = typeface
+            this.setTypeface(typeface, Typeface.NORMAL)
             if (isTurkish) textSize = 20f // was 18sp
         }
         findViewById<TextView>(R.id.title_xpert)?.apply {
-            this.typeface = typeface
+            this.setTypeface(typeface, Typeface.NORMAL)
             if (isTurkish) textSize = 52f // was 48sp
         }
         
         // Apply to tab views (with larger size for Turkish)
         findViewById<TextView>(R.id.tab_main)?.apply {
-            this.typeface = typeface
+            this.setTypeface(typeface, Typeface.NORMAL)
             if (isTurkish) textSize = 15f // was 15sp, keep same
         }
         findViewById<TextView>(R.id.tab_options)?.apply {
-            this.typeface = typeface
+            this.setTypeface(typeface, Typeface.NORMAL)
             if (isTurkish) textSize = 15f
         }
         
         // Apply to RAM/CPU/GPU monitors
         findViewById<TextView>(R.id.ram_value)?.apply {
-            this.typeface = typeface
+            this.setTypeface(typeface, Typeface.NORMAL)
             if (isTurkish) textSize = 17f // was 15sp
         }
         findViewById<TextView>(R.id.cpu_value)?.apply {
-            this.typeface = typeface
+            this.setTypeface(typeface, Typeface.NORMAL)
             if (isTurkish) textSize = 17f
         }
         findViewById<TextView>(R.id.gpu_value)?.apply {
-            this.typeface = typeface
+            this.setTypeface(typeface, Typeface.NORMAL)
             if (isTurkish) textSize = 17f
         }
         
@@ -1033,7 +1033,7 @@ class MainActivity : BaseActivity() {
         
         // Apply to language value text
         findViewById<TextView>(R.id.language_value)?.apply {
-            this.typeface = typeface
+            this.setTypeface(typeface, Typeface.NORMAL)
             if (isTurkish) textSize = 18f // was 16sp
         }
     }
@@ -1044,7 +1044,7 @@ class MainActivity : BaseActivity() {
             for (i in 0 until view.childCount) {
                 val child = view.getChildAt(i)
                 if (child is TextView) {
-                    child.typeface = typeface
+                    child.setTypeface(typeface, Typeface.NORMAL)
                     // Increase text size for Turkish on TextViews that already have the custom font
                     if (isTurkish && turkishTextSize > 0) {
                         // Only apply to titles (bold text style or specific text sizes)

@@ -54,8 +54,7 @@
                     android:layout_height="wrap_content"
                     android:textColor="?attr/colorOnSurface"
                     android:textSize="18sp"
-                    android:fontFamily="@font/ndot57"
-                    android:textStyle="bold" />
+                    android:fontFamily="@font/ndot57" />
 
                 <TextView
                     android:id="@+id/device_status"

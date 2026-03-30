@@ -13,7 +13,6 @@
         android:textColor="?attr/colorOnSurface"
         android:textSize="22sp"
         android:fontFamily="@font/ndot57"
-        android:textStyle="bold"
         android:gravity="center" />
 
     <com.nothingxpert.ui.GlyphZoneView

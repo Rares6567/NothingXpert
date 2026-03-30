@@ -143,6 +143,7 @@ class UndismissableNotifsSettingsFragment : Fragment() {
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
             val view = LayoutInflater.from(parent.context).inflate(R.layout.item_app_lock, parent, false)
+            FontHelper.applyToView(parent.context, view)
             return ViewHolder(view)
         }
 

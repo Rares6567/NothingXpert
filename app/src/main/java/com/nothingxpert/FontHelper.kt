@@ -2,26 +2,29 @@ package com.nothingxpert
 
 import android.content.Context
 import android.graphics.Typeface
+import android.view.View
+import android.view.ViewGroup
+import android.widget.TextView
 import androidx.core.content.res.ResourcesCompat
 
 object FontHelper {
     
     private var ndotTypeface: Typeface? = null
-    private var vt323Typeface: Typeface? = null
-    
+    private var ndot77Typeface: Typeface? = null
+
     /**
      * Returns the appropriate Nothing-style font based on current language.
-     * Uses Ndot57 for English, VT323 for Turkish (which has Turkish character support).
+     * Uses Ndot57 for English, Ndot77JPExtended for Turkish (which has Turkish character support).
      * Also checks system language if app is set to "System Default".
      */
     fun getNothingFont(context: Context): Typeface {
         return if (LocaleHelper.isTurkish(context)) {
-            getVT323(context)
+            getNdot77(context)
         } else {
             getNdot57(context)
         }
     }
-    
+
     /**
      * Returns Ndot57 font (original Nothing font - English only)
      */
@@ -31,22 +34,41 @@ object FontHelper {
         }
         return ndotTypeface ?: Typeface.DEFAULT
     }
-    
+
     /**
-     * Returns VT323 font (dot matrix style with Turkish support)
+     * Returns Ndot77JPExtended font (Nothing-style dot font with Turkish character support)
      */
-    fun getVT323(context: Context): Typeface {
-        if (vt323Typeface == null) {
-            vt323Typeface = ResourcesCompat.getFont(context, R.font.vt323)
+    fun getNdot77(context: Context): Typeface {
+        if (ndot77Typeface == null) {
+            ndot77Typeface = ResourcesCompat.getFont(context, R.font.ndot77jpextended)
         }
-        return vt323Typeface ?: Typeface.DEFAULT
+        return ndot77Typeface ?: Typeface.DEFAULT
     }
-    
+
+    /**
+     * Applies the locale-appropriate Nothing font to all TextViews in a view hierarchy.
+     * Use this for adapter-inflated views that aren't covered by BaseActivity.
+     */
+    fun applyToView(context: Context, view: View) {
+        val typeface = getNothingFont(context)
+        applyRecursive(view, typeface)
+    }
+
+    private fun applyRecursive(view: View, typeface: Typeface) {
+        if (view is TextView) {
+            view.setTypeface(typeface, Typeface.NORMAL)
+        } else if (view is ViewGroup) {
+            for (i in 0 until view.childCount) {
+                applyRecursive(view.getChildAt(i), typeface)
+            }
+        }
+    }
+
     /**
      * Clears cached typefaces (call when language changes)
      */
     fun clearCache() {
         ndotTypeface = null
-        vt323Typeface = null
+        ndot77Typeface = null
     }
 }

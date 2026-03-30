@@ -258,6 +258,7 @@ class GlyphNotifSettingsActivity : BaseActivity() {
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
             val view = LayoutInflater.from(parent.context)
                 .inflate(R.layout.item_glyph_app_mapping, parent, false)
+            FontHelper.applyToView(parent.context, view)
             return ViewHolder(view)
         }
 

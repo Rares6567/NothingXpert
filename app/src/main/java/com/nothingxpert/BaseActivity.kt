@@ -23,8 +23,23 @@ abstract class BaseActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
     }
 
+    override fun setContentView(layoutResID: Int) {
+        super.setContentView(layoutResID)
+        applyNothingFontToView(findViewById<View>(android.R.id.content))
+    }
+
+    override fun setContentView(view: View?) {
+        super.setContentView(view)
+        applyNothingFontToView(findViewById<View>(android.R.id.content))
+    }
+
+    override fun setContentView(view: View?, params: ViewGroup.LayoutParams?) {
+        super.setContentView(view, params)
+        applyNothingFontToView(findViewById<View>(android.R.id.content))
+    }
+
     /**
-     * Applies the appropriate Nothing-style font (Ndot57 for EN, VT323 for TR) to all TextViews
+     * Applies the appropriate Nothing-style font (Ndot57 for EN, Ndot77JPExtended for TR) to all TextViews
      * in the given view hierarchy.
      */
     protected fun applyNothingFontToView(view: View?) {
@@ -35,7 +50,7 @@ abstract class BaseActivity : AppCompatActivity() {
 
     private fun applyFontToViewRecursive(view: View, typeface: Typeface) {
         if (view is TextView) {
-            view.typeface = typeface
+            view.setTypeface(typeface, Typeface.NORMAL)
         } else if (view is ViewGroup) {
             for (i in 0 until view.childCount) {
                 applyFontToViewRecursive(view.getChildAt(i), typeface)

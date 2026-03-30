@@ -55,7 +55,6 @@
             android:fontFamily="@font/ndot57"
             android:textColor="?attr/colorOnSurface"
             android:textSize="20sp"
-            android:textStyle="bold"
             tools:text="Lock Screen" />
 
 		<TextView
