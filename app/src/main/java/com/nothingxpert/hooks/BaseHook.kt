@@ -1,6 +1,7 @@
 package com.nothingxpert.hooks
 
 import android.content.Context
+import android.util.Log
 import android.os.SystemClock
 import de.robv.android.xposed.XSharedPreferences
 import de.robv.android.xposed.XposedBridge
@@ -15,6 +16,7 @@ abstract class BaseHook {
     
     protected fun log(message: String) {
         XposedBridge.log("NothingXpert/$tag: $message")
+        runCatching { Log.i("NothingXpert/$tag", message) }
     }
     
     protected inline fun safeHook(description: String, block: () -> Unit) {

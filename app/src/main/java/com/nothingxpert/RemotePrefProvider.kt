@@ -10,7 +10,9 @@ import java.io.FileNotFoundException
 
 class RemotePrefProvider : RemotePreferenceProvider(
     AUTHORITY,
-    arrayOf(RemotePreferenceFile(PREF_FILE, true))
+    // The settings UI writes the default preference file in credential-protected storage.
+    // Serve that live file to remote readers (Gboard/SystemUI/Launcher) to avoid stale DE copies.
+    arrayOf(RemotePreferenceFile(PREF_FILE, false))
 ) {
     override fun checkAccess(prefFileName: String, prefKey: String, write: Boolean): Boolean {
         val ctx = context ?: return false
@@ -19,7 +21,7 @@ class RemotePrefProvider : RemotePreferenceProvider(
         if (caller != null) {
             return when (caller) {
                 appPackage -> true
-                SYSTEMUI_PACKAGE, SYSTEM_SERVER_PACKAGE, LAUNCHER_PACKAGE -> !write
+                SYSTEMUI_PACKAGE, SYSTEM_SERVER_PACKAGE, LAUNCHER_PACKAGE, GBOARD_PACKAGE -> !write
                 else -> false
             }
         }
@@ -30,7 +32,8 @@ class RemotePrefProvider : RemotePreferenceProvider(
         if (write) return false
         return packages.contains(SYSTEMUI_PACKAGE) ||
             packages.contains(SYSTEM_SERVER_PACKAGE) ||
-            packages.contains(LAUNCHER_PACKAGE)
+            packages.contains(LAUNCHER_PACKAGE) ||
+            packages.contains(GBOARD_PACKAGE)
     }
 
     @Throws(FileNotFoundException::class)
@@ -93,14 +96,16 @@ class RemotePrefProvider : RemotePreferenceProvider(
             return caller == appPackage ||
                 caller == SYSTEMUI_PACKAGE ||
                 caller == SYSTEM_SERVER_PACKAGE ||
-                caller == LAUNCHER_PACKAGE
+                caller == LAUNCHER_PACKAGE ||
+                caller == GBOARD_PACKAGE
         }
         val callingUid = Binder.getCallingUid()
         val packages = ctx.packageManager.getPackagesForUid(callingUid).orEmpty().toSet()
         return packages.contains(appPackage) ||
             packages.contains(SYSTEMUI_PACKAGE) ||
             packages.contains(SYSTEM_SERVER_PACKAGE) ||
-            packages.contains(LAUNCHER_PACKAGE)
+            packages.contains(LAUNCHER_PACKAGE) ||
+            packages.contains(GBOARD_PACKAGE)
     }
 
     private fun canWriteFromCaller(): Boolean {
@@ -129,6 +134,7 @@ class RemotePrefProvider : RemotePreferenceProvider(
         private const val SYSTEMUI_PACKAGE = "com.android.systemui"
         private const val SYSTEM_SERVER_PACKAGE = "android"
         private const val LAUNCHER_PACKAGE = "com.nothing.launcher"
+        private const val GBOARD_PACKAGE = "com.google.android.inputmethod.latin"
 
         fun buildDepthSubjectUri(version: Long): String {
             return Uri.Builder()

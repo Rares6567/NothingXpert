@@ -20,7 +20,10 @@
             android:paddingHorizontal="8dp"
             android:paddingVertical="12dp"
             app:contentInsetStartWithNavigation="0dp"
-            app:navigationIcon="?attr/homeAsUpIndicator" />
+            app:navigationIcon="?attr/homeAsUpIndicator"
+            app:navigationIconTint="?attr/colorOnSurface"
+            app:titleTextAppearance="@style/Toolbar.TitleText"
+            app:titleTextColor="?attr/colorOnSurface" />
 
     </com.google.android.material.appbar.AppBarLayout>
 

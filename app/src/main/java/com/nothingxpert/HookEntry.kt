@@ -3,6 +3,7 @@ package com.nothingxpert
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import androidx.core.content.ContextCompat
 import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.XC_MethodHook
@@ -37,6 +38,7 @@ class HookEntry : IXposedHookLoadPackage, XPrefs.OnPreferenceUpdateListener {
         if (!initialized) {
             initialized = true
             XposedBridge.log("NothingXpert: Module loaded, installing hooks...")
+            runCatching { Log.i("NothingXpert", "Module loaded, installing hooks...") }
         }
         
         // Store SystemUI classloader for tap position methods
@@ -54,7 +56,7 @@ class HookEntry : IXposedHookLoadPackage, XPrefs.OnPreferenceUpdateListener {
                 "com.nothing.launcher.NTLauncherApplication"
             )
         }
-        
+
         // Install all hooks
         hooks.forEach { hook ->
             try {
@@ -87,15 +89,35 @@ class HookEntry : IXposedHookLoadPackage, XPrefs.OnPreferenceUpdateListener {
                             XPrefs.addOnPreferenceUpdateListener(this@HookEntry)
                             XPrefs.registerPreferenceChangeListener()
                             BaseHook.useRemotePrefs = true
+                            runCatching {
+                                Log.i(
+                                    "NothingXpert",
+                                    "XPrefs initialized in ${lpparam.packageName} via $applicationClassName"
+                                )
+                            }
                         } catch (t: Throwable) {
                             XposedBridge.log("NothingXpert: Failed to initialize XPrefs: $t")
                             BaseHook.useRemotePrefs = false
+                            runCatching {
+                                Log.e(
+                                    "NothingXpert",
+                                    "Failed to initialize XPrefs in ${lpparam.packageName}",
+                                    t
+                                )
+                            }
                         }
                     }
                 }
             )
         } catch (t: Throwable) {
             XposedBridge.log("NothingXpert: Failed to hook for XPrefs: $t")
+            runCatching {
+                Log.e(
+                    "NothingXpert",
+                    "Failed to hook for XPrefs in ${lpparam.packageName} using $applicationClassName",
+                    t
+                )
+            }
         }
     }
     

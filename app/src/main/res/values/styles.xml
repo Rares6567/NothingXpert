@@ -93,7 +93,10 @@
     </style>
 
     <!-- Toolbar styles -->
-    <style name="Toolbar.TitleText" parent="TextAppearance.Material3.TitleLarge" />
+    <style name="Toolbar.TitleText" parent="TextAppearance.Material3.TitleLarge">
+        <item name="fontFamily">@font/ndot57</item>
+        <item name="android:fontFamily">@font/ndot57</item>
+    </style>
 
     <style name="Toolbar.TitleText.Collapsed">
         <item name="android:textSize">22sp</item>

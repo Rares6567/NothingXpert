@@ -2,12 +2,17 @@ package com.nothingxpert
 
 import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.SharedPreferences
+import android.database.ContentObserver
+import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
+import android.provider.Settings
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
@@ -17,6 +22,8 @@ import com.nothing.ketchum.GlyphException
 import com.nothing.ketchum.GlyphFrame
 import com.nothing.ketchum.GlyphManager
 import com.nothingxpert.util.RootShell
+import java.time.DayOfWeek
+import java.time.LocalTime
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -38,6 +45,10 @@ class GlyphNotificationService : NotificationListenerService() {
         private const val ESSENTIAL_SYNC_REFRESH_TIMEOUT_MS = 8_000L
         private const val ESSENTIAL_IN_FLIGHT_WAIT_MS = 1_500L
         private const val ESSENTIAL_SYNC_RETRY_WINDOW_MS = 5_000L
+        private const val GLYPH_BEDTIME_ENABLED = "led_effect_schedule_time_ebable"
+        private const val GLYPH_BEDTIME_START = "led_bed_time_custom_start_time"
+        private const val GLYPH_BEDTIME_END = "led_bed_time_custom_end_time"
+        private const val GLYPH_BEDTIME_WEEK = "led_bed_time_custom_week"
 
         // Phone (1) channel constants.
         private const val CH_P1_A1 = 0
@@ -74,6 +85,7 @@ class GlyphNotificationService : NotificationListenerService() {
     private var glyphManager: GlyphManager? = null
     private var isSessionOpen = false
     private var isServiceConnected = false
+    private var isGlyphSdkAuthorized = false
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var prefs: SharedPreferences
 
@@ -106,6 +118,29 @@ class GlyphNotificationService : NotificationListenerService() {
     private var lastEssentialSyncAttemptMs: Long = 0L
 
     private val essentialRefreshInFlight = AtomicBoolean(false)
+    private val bedtimeSettingUris by lazy {
+        listOf(
+            Settings.Global.getUriFor(GLYPH_BEDTIME_ENABLED),
+            Settings.Global.getUriFor(GLYPH_BEDTIME_START),
+            Settings.Global.getUriFor(GLYPH_BEDTIME_END),
+            Settings.Global.getUriFor(GLYPH_BEDTIME_WEEK)
+        )
+    }
+    private val bedtimeSettingsObserver = object : ContentObserver(handler) {
+        override fun onChange(selfChange: Boolean, uri: Uri?) {
+            Log.d(TAG, "Glyph bedtime setting changed: $uri")
+            refreshGlyphs()
+        }
+    }
+    private val timeTickReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                Intent.ACTION_TIME_TICK,
+                Intent.ACTION_TIME_CHANGED,
+                Intent.ACTION_TIMEZONE_CHANGED -> refreshGlyphs()
+            }
+        }
+    }
 
     private val prefChangeListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         when (key) {
@@ -148,6 +183,7 @@ class GlyphNotificationService : NotificationListenerService() {
 
         // Initialize Glyph SDK
         initGlyphManager()
+        registerBedtimeObservers()
 
         refreshEssentialPackagesAsync(force = true)
 
@@ -164,6 +200,7 @@ class GlyphNotificationService : NotificationListenerService() {
         activeNotifications.clear()
         activeEssentialNotifications.clear()
         manualPreviewZones = null
+        unregisterBedtimeObservers()
         closeGlyphSession()
         glyphManager?.unInit()
         glyphManager = null
@@ -184,6 +221,31 @@ class GlyphNotificationService : NotificationListenerService() {
         } catch (e: Exception) {
             Log.w(TAG, "Failed to enable glyph debug mode: ${e.message}")
         }
+    }
+
+    private fun registerBedtimeObservers() {
+        try {
+            bedtimeSettingUris.forEach { uri ->
+                contentResolver.registerContentObserver(uri, false, bedtimeSettingsObserver)
+            }
+            val filter = IntentFilter().apply {
+                addAction(Intent.ACTION_TIME_TICK)
+                addAction(Intent.ACTION_TIME_CHANGED)
+                addAction(Intent.ACTION_TIMEZONE_CHANGED)
+            }
+            registerReceiver(timeTickReceiver, filter)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to register bedtime observers: ${e.message}")
+        }
+    }
+
+    private fun unregisterBedtimeObservers() {
+        try {
+            contentResolver.unregisterContentObserver(bedtimeSettingsObserver)
+        } catch (_: Exception) {}
+        try {
+            unregisterReceiver(timeTickReceiver)
+        } catch (_: Exception) {}
     }
 
     private fun disableDebugModeAsync() {
@@ -216,6 +278,7 @@ class GlyphNotificationService : NotificationListenerService() {
                     Log.d(TAG, "GlyphManager service disconnected")
                     isServiceConnected = false
                     isSessionOpen = false
+                    isGlyphSdkAuthorized = false
                 }
             })
         } catch (e: Exception) {
@@ -226,26 +289,44 @@ class GlyphNotificationService : NotificationListenerService() {
     private fun registerDevice() {
         try {
             val gm = glyphManager ?: return
-            when {
-                Common.is20111() -> gm.register(Glyph.DEVICE_20111)
-                Common.is22111() -> gm.register(Glyph.DEVICE_22111)
-                Common.is23111() -> gm.register(Glyph.DEVICE_23111)
-                Common.is23113() -> gm.register(Glyph.DEVICE_23113)
-                Common.is24111() -> gm.register(Glyph.DEVICE_24111)
+            val targetDevice = when {
+                Common.is20111() -> Glyph.DEVICE_20111
+                Common.is22111() -> Glyph.DEVICE_22111
+                Common.is23111() -> Glyph.DEVICE_23111
+                Common.is23113() -> Glyph.DEVICE_23113
+                Common.is24111() -> Glyph.DEVICE_24111
                 else -> {
                     when (Build.DEVICE?.lowercase()) {
-                        "spacewar" -> gm.register(Glyph.DEVICE_20111)
-                        "pong" -> gm.register(Glyph.DEVICE_22111)
-                        else -> Log.w(TAG, "Unknown device: ${Build.DEVICE}")
+                        "spacewar" -> Glyph.DEVICE_20111
+                        "pong" -> Glyph.DEVICE_22111
+                        else -> null
                     }
                 }
             }
+
+            if (targetDevice == null) {
+                isGlyphSdkAuthorized = false
+                Log.w(TAG, "Unknown device for Glyph registration: model=${Build.MODEL} device=${Build.DEVICE}")
+                return
+            }
+
+            isGlyphSdkAuthorized = gm.register(targetDevice)
+            Log.d(
+                TAG,
+                "Glyph SDK register result: authorized=$isGlyphSdkAuthorized target=$targetDevice model=${Build.MODEL} device=${Build.DEVICE}"
+            )
         } catch (e: Exception) {
+            isGlyphSdkAuthorized = false
             Log.e(TAG, "Failed to register device: ${e.message}")
         }
     }
 
     private fun openGlyphSession() {
+        if (!isGlyphSdkAuthorized) {
+            isSessionOpen = false
+            Log.w(TAG, "Skip opening Glyph session: SDK not authorized")
+            return
+        }
         try {
             glyphManager?.openSession()
             isSessionOpen = true
@@ -410,10 +491,68 @@ class GlyphNotificationService : NotificationListenerService() {
             allZones = merged.toSet()
         }
 
-        if (allZones.isEmpty()) {
+        if (isWithinGlyphBedtime()) {
+            if (allZones.isNotEmpty()) {
+                Log.d(TAG, "Suppress glyphs during Nothing bedtime schedule")
+            }
+            turnOffGlyphs()
+        } else if (allZones.isEmpty()) {
             turnOffGlyphs()
         } else {
             activateGlyphs(allZones)
+        }
+    }
+
+    private fun isWithinGlyphBedtime(): Boolean {
+        return try {
+            if (Settings.Global.getInt(contentResolver, GLYPH_BEDTIME_ENABLED, 0) != 1) {
+                return false
+            }
+
+            val start = parseGlyphBedtimeValue(Settings.Global.getString(contentResolver, GLYPH_BEDTIME_START))
+                ?: return false
+            val end = parseGlyphBedtimeValue(Settings.Global.getString(contentResolver, GLYPH_BEDTIME_END))
+                ?: return false
+            val week = Settings.Global.getString(contentResolver, GLYPH_BEDTIME_WEEK).orEmpty()
+            if (week.length != 7 || week.any { it != '0' && it != '1' }) return false
+
+            val now = LocalTime.now()
+            val todayIndex = dayToWeekIndex(DayOfWeek.from(java.time.LocalDate.now()))
+            val previousIndex = (todayIndex + 6) % 7
+
+            when {
+                start == end -> week[todayIndex] == '1'
+                start < end -> week[todayIndex] == '1' && now >= start && now < end
+                else -> {
+                    (week[todayIndex] == '1' && now >= start) ||
+                        (week[previousIndex] == '1' && now < end)
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to evaluate Glyph bedtime: ${e.message}")
+            false
+        }
+    }
+
+    private fun parseGlyphBedtimeValue(value: String?): LocalTime? {
+        if (value.isNullOrBlank()) return null
+        val parts = value.split(",")
+        if (parts.size != 2) return null
+        val hour = parts[0].toIntOrNull() ?: return null
+        val minute = parts[1].toIntOrNull() ?: return null
+        if (hour !in 0..23 || minute !in 0..59) return null
+        return LocalTime.of(hour, minute)
+    }
+
+    private fun dayToWeekIndex(dayOfWeek: DayOfWeek): Int {
+        return when (dayOfWeek) {
+            DayOfWeek.MONDAY -> 0
+            DayOfWeek.TUESDAY -> 1
+            DayOfWeek.WEDNESDAY -> 2
+            DayOfWeek.THURSDAY -> 3
+            DayOfWeek.FRIDAY -> 4
+            DayOfWeek.SATURDAY -> 5
+            DayOfWeek.SUNDAY -> 6
         }
     }
 
@@ -695,6 +834,10 @@ class GlyphNotificationService : NotificationListenerService() {
     private fun activateGlyphs(zones: Set<String>) {
         val gm = glyphManager ?: return
         if (!isServiceConnected) return
+        if (!isGlyphSdkAuthorized) {
+            Log.w(TAG, "Skip glyph activation because SDK register failed: zones=$zones")
+            return
+        }
 
         if (!isSessionOpen) {
             enableDebugModeSync()
@@ -704,6 +847,10 @@ class GlyphNotificationService : NotificationListenerService() {
 
         try {
             val builder = gm.glyphFrameBuilder
+            if (builder == null) {
+                Log.w(TAG, "Glyph frame builder unavailable")
+                return
+            }
             val isPhone1 = resolvePhone1ChannelMode()
 
             for (zone in zones) {

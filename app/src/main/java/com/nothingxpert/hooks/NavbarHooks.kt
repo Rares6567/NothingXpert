@@ -1,14 +1,18 @@
 package com.nothingxpert.hooks
 
+import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.view.inputmethod.EditorInfo
+import android.inputmethodservice.InputMethodService
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
 import com.nothingxpert.HookEntry
+import com.nothingxpert.XPrefs
 import java.util.concurrent.atomic.AtomicBoolean
 
 class NavbarHooks : BaseHook() {
@@ -16,6 +20,7 @@ class NavbarHooks : BaseHook() {
     
     private val handler by lazy { Handler(Looper.getMainLooper()) }
     private val imeDumpOnce = AtomicBoolean(false)
+    private val imePrefsInitOnce = AtomicBoolean(false)
     
     override fun install(lpparam: XC_LoadPackage.LoadPackageParam) {
         when (lpparam.packageName) {
@@ -85,99 +90,166 @@ class NavbarHooks : BaseHook() {
     }
     
     private fun installHideImeBarHook(lpparam: XC_LoadPackage.LoadPackageParam) {
-        safeHook("InputMethodService.onWindowShown") {
-            // Try to hook the actual GBoard implementation classes
+        safeHook("InputMethodService universal IME bar hooks") {
+            val imsClass = InputMethodService::class.java
 
-            var hooked = false
-            for (className in GBOARD_INPUT_CLASSES) {
-                try {
-                    val imsClass = XposedHelpers.findClass(className, lpparam.classLoader)
-
-                    // Hook onWindowShown
-                    XposedHelpers.findAndHookMethod(
-                        imsClass,
-                        "onWindowShown",
-                        object : XC_MethodHook() {
-                            override fun afterHookedMethod(param: MethodHookParam) {
-                                if (!isHideImeBarEnabled()) return
-                                log("onWindowShown called, class: ${param.thisObject.javaClass.name}")
-                                val ims = param.thisObject
-                                handler.post { hideImeSwitcher(ims) }
-                            }
+            XposedHelpers.findAndHookMethod(
+                imsClass,
+                "onWindowShown",
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        val ims = param.thisObject
+                        maybeInitImePrefs(ims)
+                        if (!isHideImeBarEnabled()) return
+                        log("onWindowShown called, class: ${ims.javaClass.name}")
+                        handler.post {
+                            hideImeSwitcher(ims)
+                            ensureImeLayoutWatcher(ims)
                         }
-                    )
-
-                    // Hook onStartInputView
-                    XposedHelpers.findAndHookMethod(
-                        imsClass,
-                        "onStartInputView",
-                        EditorInfo::class.java,
-                        Boolean::class.javaPrimitiveType,
-                        object : XC_MethodHook() {
-                            override fun afterHookedMethod(param: MethodHookParam) {
-                                if (!isHideImeBarEnabled()) return
-                                log("onStartInputView called, class: ${param.thisObject.javaClass.name}")
-                                val ims = param.thisObject
-                                handler.post { hideImeSwitcher(ims) }
-                            }
-                        }
-                    )
-
-                    // Hook onComputeInsets to zero out the bottom insets
-                    try {
-                        XposedHelpers.findAndHookMethod(
-                            imsClass,
-                            "onComputeInsets",
-                            object : XC_MethodHook() {
-                                override fun afterHookedMethod(param: MethodHookParam) {
-                                    if (!isHideImeBarEnabled()) return
-                                    try {
-                                        val insets = param.args[0]
-                                        // Set contentTopInsets to visibleTopInsets to remove the bottom gap
-                                        XposedHelpers.setIntField(insets, "contentTopInsets",
-                                            XposedHelpers.getIntField(insets, "visibleTopInsets"))
-                                        XposedHelpers.setIntField(insets, "touchableInsets", 0) // INSETS_TOUCHABLE_INNER
-                                        log("Adjusted onComputeInsets")
-                                    } catch (t: Throwable) {
-                                        log("Failed to adjust insets: $t")
-                                    }
-                                }
-                            }
-                        )
-                    } catch (t: Throwable) {
-                        log("onComputeInsets hook failed (may not exist in this class): ${t.message}")
                     }
-
-                    log("IME bar hider hooked into $className")
-                    hooked = true
-                    break  // Successfully hooked, no need to try other classes
-                } catch (t: Throwable) {
-                    log("Failed to hook $className: ${t.message}")
                 }
+            )
+
+            XposedHelpers.findAndHookMethod(
+                imsClass,
+                "onStartInputView",
+                EditorInfo::class.java,
+                Boolean::class.javaPrimitiveType,
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        val ims = param.thisObject
+                        maybeInitImePrefs(ims)
+                        if (!isHideImeBarEnabled()) return
+                        log("onStartInputView called, class: ${ims.javaClass.name}")
+                        handler.post {
+                            hideImeSwitcher(ims)
+                            ensureImeLayoutWatcher(ims)
+                        }
+                    }
+                }
+            )
+
+            try {
+                XposedHelpers.findAndHookMethod(
+                    imsClass,
+                    "onComputeInsets",
+                    InputMethodService.Insets::class.java,
+                    object : XC_MethodHook() {
+                        override fun afterHookedMethod(param: MethodHookParam) {
+                            maybeInitImePrefs(param.thisObject)
+                            if (!isHideImeBarEnabled()) return
+                            try {
+                                val insets = param.args[0]
+                                XposedHelpers.setIntField(
+                                    insets,
+                                    "contentTopInsets",
+                                    XposedHelpers.getIntField(insets, "visibleTopInsets")
+                                )
+                                XposedHelpers.setIntField(insets, "touchableInsets", 0)
+                            } catch (t: Throwable) {
+                                log("Failed to adjust IME insets: $t")
+                            }
+                        }
+                    }
+                )
+            } catch (t: Throwable) {
+                log("onComputeInsets hook failed: ${t.message}")
             }
 
-            if (!hooked) {
-                log("Failed to hook any InputMethodService class!")
-            } else {
-                log("IME bar hider installed successfully")
+            log("IME bar hider installed using InputMethodService base hooks")
+        }
+
+        safeHook("Gboard InputView padding override") {
+            val inputViewClass = XposedHelpers.findClass(
+                "com.google.android.libraries.inputmethod.inputview.InputView",
+                lpparam.classLoader
+            )
+            XposedHelpers.findAndHookMethod(
+                View::class.java,
+                "setPadding",
+                Int::class.javaPrimitiveType,
+                Int::class.javaPrimitiveType,
+                Int::class.javaPrimitiveType,
+                Int::class.javaPrimitiveType,
+                object : XC_MethodHook() {
+                    override fun beforeHookedMethod(param: MethodHookParam) {
+                        maybeInitImePrefs(param.thisObject)
+                        if (!isHideImeBarEnabled()) return
+                        if (!inputViewClass.isInstance(param.thisObject)) return
+                        val bottom = param.args[3] as? Int ?: return
+                        if (bottom == 0) return
+                        param.args[3] = 0
+                        log("Forced Gboard InputView bottom padding from $bottom to 0")
+                    }
+                }
+            )
+            log("Gboard InputView padding override installed")
+        }
+    }
+
+    private fun maybeInitImePrefs(ims: Any?) {
+        if (BaseHook.useRemotePrefs) return
+        val context = ims as? Context ?: return
+        try {
+            XPrefs.init(context.applicationContext)
+            BaseHook.useRemotePrefs = true
+            if (imePrefsInitOnce.compareAndSet(false, true)) {
+                log("Initialized RemotePreferences in IME process ${ims.javaClass.name}")
+            }
+        } catch (t: Throwable) {
+            if (imePrefsInitOnce.compareAndSet(false, true)) {
+                log("Failed to initialize RemotePreferences in IME process: $t")
             }
         }
     }
-    
+
+    private fun ensureImeLayoutWatcher(ims: Any) {
+        try {
+            val dialog = XposedHelpers.callMethod(ims, "getWindow") as? android.app.Dialog ?: return
+            val decor = dialog.window?.decorView ?: return
+            val existing = XposedHelpers.getAdditionalInstanceField(decor, IME_LAYOUT_WATCHER_KEY)
+            if (existing != null) return
+
+            val listener = ViewTreeObserver.OnGlobalLayoutListener {
+                if (!isHideImeBarEnabled()) return@OnGlobalLayoutListener
+                hideImeSwitcher(ims)
+            }
+            decor.viewTreeObserver.addOnGlobalLayoutListener(listener)
+            XposedHelpers.setAdditionalInstanceField(decor, IME_LAYOUT_WATCHER_KEY, listener)
+            decor.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+                override fun onViewAttachedToWindow(v: View) = Unit
+
+                override fun onViewDetachedFromWindow(v: View) {
+                    val stored = XposedHelpers.getAdditionalInstanceField(v, IME_LAYOUT_WATCHER_KEY)
+                        as? ViewTreeObserver.OnGlobalLayoutListener
+                    if (stored != null && v.viewTreeObserver.isAlive) {
+                        v.viewTreeObserver.removeOnGlobalLayoutListener(stored)
+                    }
+                    XposedHelpers.removeAdditionalInstanceField(v, IME_LAYOUT_WATCHER_KEY)
+                    v.removeOnAttachStateChangeListener(this)
+                }
+            })
+        } catch (t: Throwable) {
+            log("Failed to install IME layout watcher: $t")
+        }
+    }
+
     private fun hideImeSwitcher(ims: Any) {
         try {
-            log("hideImeSwitcher called for: ${ims.javaClass.name}")
             val dialog = XposedHelpers.callMethod(ims, "getWindow") as? android.app.Dialog ?: run {
-                log("getWindow returned null or not a Dialog")
                 return
             }
             val window = dialog.window ?: run {
-                log("dialog.window returned null")
                 return
             }
             val decor = window.decorView
-            log("decorView: ${decor.javaClass.name}")
-            val ids = listOf("input_method_nav_bar", "input_method_nav_back", "input_method_nav_ime_switcher")
+            val ids = listOf(
+                "input_method_nav_bar",
+                "input_method_nav_back",
+                "input_method_nav_ime_switcher",
+                "input_method_nav_home_handle",
+                "input_method_nav_gesture"
+            )
             var hiddenAny = false
             for (name in ids) {
                 val id = decor.resources.getIdentifier(name, "id", "android")
@@ -191,11 +263,15 @@ class NavbarHooks : BaseHook() {
                 hiddenAny = true
             }
             if (hiddenAny) {
-                log("IME nav bar hidden")
+                log("IME nav bar hidden for ${ims.javaClass.name}")
+            }
+            if (hideImeNavBarClasses(decor)) {
+                hiddenAny = true
             }
             zeroBottomPaddingUp(decor, 6)
             adjustImeInputViewPadding(decor)
             decor.post {
+                hideImeNavBarClasses(decor)
                 adjustImeInputViewPadding(decor)
                 stripImeBottomInset(decor)
             }
@@ -206,6 +282,47 @@ class NavbarHooks : BaseHook() {
         } catch (t: Throwable) {
             log("Failed to hide IME nav bar: $t")
         }
+    }
+
+    private fun hideImeNavBarClasses(root: View): Boolean {
+        var changed = false
+        fun visit(v: View) {
+            if (v is ViewGroup) {
+                for (i in 0 until v.childCount) {
+                    visit(v.getChildAt(i))
+                }
+            }
+            val className = v.javaClass.name
+            val isImeNavBar = className.contains("inputmethodservice.navigationbar.NavigationBarFrame") ||
+                className.endsWith(".NavigationBarFrame") ||
+                className.contains("inputmethodservice.navigationbar.NavigationBarView") ||
+                className.endsWith(".NavigationBarView")
+            if (!isImeNavBar) return
+
+            if (v.visibility != View.GONE) {
+                v.visibility = View.GONE
+                changed = true
+            }
+            if (v.alpha != 0f) {
+                v.alpha = 0f
+                changed = true
+            }
+            val lp = v.layoutParams
+            if (lp != null && lp.height != 0) {
+                lp.height = 0
+                v.layoutParams = lp
+                changed = true
+            }
+            if (v.paddingBottom != 0) {
+                v.setPadding(v.paddingLeft, v.paddingTop, v.paddingRight, 0)
+                changed = true
+            }
+        }
+        visit(root)
+        if (changed) {
+            root.requestLayout()
+        }
+        return changed
     }
     
     private fun hideHomeHandle(navBarView: ViewGroup, source: String) {
@@ -301,13 +418,6 @@ class NavbarHooks : BaseHook() {
     
     private fun adjustImeInputViewPadding(root: View): Boolean {
         var changed = false
-        val navBarHeight = getNavBarHeight(root) ?: 0
-        val minPad = dpToPx(root, 8)
-        val target = if (navBarHeight > 0) {
-            kotlin.math.max(minPad, navBarHeight / 4)
-        } else {
-            minPad
-        }
         fun visit(v: View) {
             if (v is ViewGroup) {
                 for (i in 0 until v.childCount) {
@@ -316,8 +426,8 @@ class NavbarHooks : BaseHook() {
             }
             val className = v.javaClass.name
             val isInputView = className.contains("inputview.InputView")
-            if (isInputView && v.paddingBottom > target) {
-                v.setPadding(v.paddingLeft, v.paddingTop, v.paddingRight, target)
+            if (isInputView && v.paddingBottom != 0) {
+                v.setPadding(v.paddingLeft, v.paddingTop, v.paddingRight, 0)
                 changed = true
             }
         }
@@ -326,11 +436,6 @@ class NavbarHooks : BaseHook() {
             root.requestLayout()
         }
         return changed
-    }
-    
-    private fun dpToPx(view: View, dp: Int): Int {
-        val density = view.resources.displayMetrics.density
-        return (dp * density).toInt().coerceAtLeast(1)
     }
     
     private fun dumpImeBottomViews(root: View) {
@@ -388,5 +493,6 @@ class NavbarHooks : BaseHook() {
 
         private const val PREF_HIDE_IME_BAR = "pref_hide_ime_bar"
         const val ENABLE_HIDE_NAVBAR = true
+        private const val IME_LAYOUT_WATCHER_KEY = "nothingxpert_ime_layout_watcher"
     }
 }

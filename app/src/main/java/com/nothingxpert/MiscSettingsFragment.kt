@@ -21,6 +21,10 @@ class MiscSettingsFragment : BasePreferenceFragment() {
             }
         }, 100)
         if (key == HookEntry.PREF_HIDE_IME_BAR) {
+            if (isAdded) {
+                PrefsUtil.ensurePrefsAccessible(requireContext())
+                PreferenceUtils.fixPermissions(requireContext())
+            }
             val enabled = prefs?.getBoolean(HookEntry.PREF_HIDE_IME_BAR, false) ?: false
             val intent = android.content.Intent(HookEntry.ACTION_IME_BAR_TOGGLED).apply {
                 putExtra(HookEntry.EXTRA_IME_BAR_ENABLED, enabled)
