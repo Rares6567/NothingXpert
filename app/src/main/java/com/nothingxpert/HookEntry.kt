@@ -126,6 +126,9 @@ class HookEntry : IXposedHookLoadPackage, XPrefs.OnPreferenceUpdateListener {
         if (key == SystemHooks.PREF_SHAKE_TORCH) {
             SystemHooks.refreshFromPrefs()
         }
+        if (key == SystemHooks.PREF_LOCKSCREEN_FLASHLIGHT_TAP) {
+            SystemHooks.refreshLockscreenFlashlightIndication()
+        }
         if (key == FloatingWindowHooks.PREF_FLOATING_WINDOW_ENABLED ||
             key == FloatingWindowHooks.PREF_FLOATING_WINDOW_SIZE) {
             FloatingWindowHooks.refreshFromPrefs()

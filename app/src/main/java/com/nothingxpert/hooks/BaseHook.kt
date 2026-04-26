@@ -211,6 +211,10 @@ abstract class BaseHook {
         private val flashlightState = AtomicBoolean(false)
 
         fun toggleFlashlight(context: Context?): Boolean {
+            return setFlashlight(context, !flashlightState.get())
+        }
+
+        fun setFlashlight(context: Context?, enabled: Boolean): Boolean {
             try {
                 val ctx = context ?: getSystemContext()
                 val cameraManager = ctx?.getSystemService(Context.CAMERA_SERVICE) as? android.hardware.camera2.CameraManager
@@ -218,22 +222,39 @@ abstract class BaseHook {
                     XposedBridge.log("NothingXpert: CameraManager is null")
                     return false
                 }
-                val cameraId = cameraManager.cameraIdList.firstOrNull { id ->
-                    val characteristics = cameraManager.getCameraCharacteristics(id)
-                    characteristics.get(android.hardware.camera2.CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
-                }
+                val cameraId = findFlashCameraId(cameraManager)
                 if (cameraId == null) {
                     XposedBridge.log("NothingXpert: No camera with flash found")
                     return false
                 }
-                val isOn = flashlightState.get()
-                cameraManager.setTorchMode(cameraId, !isOn)
-                flashlightState.set(!isOn)
-                XposedBridge.log("NothingXpert: Flashlight toggled to ${!isOn}")
+                cameraManager.setTorchMode(cameraId, enabled)
+                flashlightState.set(enabled)
+                XposedBridge.log("NothingXpert: Flashlight set to $enabled")
                 return true
             } catch (t: Throwable) {
-                XposedBridge.log("NothingXpert: toggleFlashlight failed: $t")
+                XposedBridge.log("NothingXpert: setFlashlight failed: $t")
                 return false
+            }
+        }
+
+        fun turnOffFlashlight(context: Context?): Boolean = setFlashlight(context, false)
+
+        private fun findFlashCameraId(cameraManager: android.hardware.camera2.CameraManager): String? {
+            var fallback: String? = null
+            return try {
+                for (id in cameraManager.cameraIdList) {
+                    val characteristics = cameraManager.getCameraCharacteristics(id)
+                    val hasFlash = characteristics.get(android.hardware.camera2.CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
+                    if (!hasFlash) continue
+                    val facing = characteristics.get(android.hardware.camera2.CameraCharacteristics.LENS_FACING)
+                    if (facing == android.hardware.camera2.CameraCharacteristics.LENS_FACING_BACK) {
+                        return id
+                    }
+                    if (fallback == null) fallback = id
+                }
+                fallback
+            } catch (_: Throwable) {
+                null
             }
         }
 
