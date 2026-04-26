@@ -46,6 +46,8 @@ class SystemHooks : BaseHook() {
 
         installLockscreenFlashlightIndicationHook(lpparam)
         installQuickSettingsExpansionHook(lpparam)
+        installBouncerVisibilityHook(lpparam)
+        installBouncerTransitionHook(lpparam)
         
         if (getPreferenceBoolean("pref_status_bar_double_tap_sleep", false)) {
             installStatusBarDoubleTapHook(lpparam)
@@ -189,6 +191,47 @@ class SystemHooks : BaseHook() {
             )
         }
     }
+
+    private fun installBouncerVisibilityHook(lpparam: XC_LoadPackage.LoadPackageParam) {
+        safeHook("CentralSurfacesImpl.setBouncerShowing") {
+            XposedHelpers.findAndHookMethod(
+                "com.android.systemui.statusbar.phone.CentralSurfacesImpl",
+                lpparam.classLoader,
+                "setBouncerShowing",
+                Boolean::class.javaPrimitiveType,
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        val showing = (param.args.firstOrNull() as? Boolean) ?: return
+                        if (keyguardBouncerShowing != showing) {
+                            keyguardBouncerShowing = showing
+                            refreshLockscreenFlashlightIndication()
+                        }
+                    }
+                }
+            )
+        }
+    }
+
+    private fun installBouncerTransitionHook(lpparam: XC_LoadPackage.LoadPackageParam) {
+        safeHook("CentralSurfacesImpl.setPrimaryBouncerHiddenFraction") {
+            XposedHelpers.findAndHookMethod(
+                "com.android.systemui.statusbar.phone.CentralSurfacesImpl",
+                lpparam.classLoader,
+                "setPrimaryBouncerHiddenFraction",
+                Float::class.javaPrimitiveType,
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        val hiddenFraction = (param.args.firstOrNull() as? Float) ?: return
+                        val transitioning = hiddenFraction < 0.98f
+                        if (keyguardBouncerTransitioning != transitioning) {
+                            keyguardBouncerTransitioning = transitioning
+                            refreshLockscreenFlashlightIndication()
+                        }
+                    }
+                }
+            )
+        }
+    }
     
     companion object {
         const val PREF_SHAKE_TORCH = "pref_shake_torch"
@@ -222,6 +265,8 @@ class SystemHooks : BaseHook() {
         @Volatile private var notificationStackBaseTranslationY = 0f
         @Volatile private var notificationStackShiftApplied = false
         @Volatile private var quickSettingsExpanded = false
+        @Volatile private var keyguardBouncerShowing = false
+        @Volatile private var keyguardBouncerTransitioning = false
         @Volatile private var torchCallbackRegistered = false
         @Volatile private var torchCameraId: String? = null
         @Volatile private var torchCameraManager: CameraManager? = null
@@ -414,6 +459,8 @@ class SystemHooks : BaseHook() {
                 val shouldShow = enabled &&
                     BaseHook.isFlashlightOn() &&
                     !quickSettingsExpanded &&
+                    !keyguardBouncerShowing &&
+                    !keyguardBouncerTransitioning &&
                     isKeyguardIndicationVisible(controller) &&
                     !isKeyguardIndicationDozing(controller)
 
