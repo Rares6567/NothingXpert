@@ -29,8 +29,11 @@ object RootShell {
         val exitCode: Int,
     )
 
-    private fun shQuote(s: String): String {
-        // Wrap in single-quotes; escape embedded single quotes as: '\'' .
+    /**
+     * Wrap [s] in single quotes, escaping embedded single quotes as `'\''`.
+     * Safe to interpolate the result directly into a shell command line.
+     */
+    fun shQuote(s: String): String {
         return "'" + s.replace("'", "'\\''") + "'"
     }
 

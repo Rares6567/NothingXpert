@@ -136,7 +136,6 @@
         <provider
             android:name=".RemotePrefProvider"
             android:authorities="com.nothingxpert"
-            android:directBootAware="true"
             android:exported="true" />
 
     </application>

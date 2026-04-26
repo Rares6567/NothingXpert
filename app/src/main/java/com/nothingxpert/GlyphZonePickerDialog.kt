@@ -2,6 +2,8 @@ package com.nothingxpert
 
 import android.content.DialogInterface
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -44,6 +46,8 @@ class GlyphZonePickerDialog : DialogFragment() {
     private lateinit var glyphZoneView: GlyphZoneView
     private lateinit var selectedZonesLabel: TextView
     private var currentDeviceType: GlyphZoneView.DeviceType = GlyphZoneView.DeviceType.PHONE_2
+    private val previewHandler = Handler(Looper.getMainLooper())
+    private var pendingPreviewRunnable: Runnable? = null
 
     override fun onCreateDialog(savedInstanceState: Bundle?): android.app.Dialog {
         val context = requireContext()
@@ -70,7 +74,12 @@ class GlyphZonePickerDialog : DialogFragment() {
 
         glyphZoneView.onZoneSelectionChanged = { zones ->
             updateLabel(zones)
-            GlyphNotificationService.setPickerPreviewZones(zones)
+            pendingPreviewRunnable?.let { previewHandler.removeCallbacks(it) }
+            val runnable = Runnable {
+                GlyphNotificationService.setPickerPreviewZones(zones)
+            }
+            pendingPreviewRunnable = runnable
+            previewHandler.postDelayed(runnable, 80L)
         }
 
         return MaterialAlertDialogBuilder(context)
@@ -174,6 +183,8 @@ class GlyphZonePickerDialog : DialogFragment() {
     }
 
     override fun onDestroyView() {
+        pendingPreviewRunnable?.let { previewHandler.removeCallbacks(it) }
+        pendingPreviewRunnable = null
         GlyphNotificationService.clearPickerPreview()
         super.onDestroyView()
         onZonesSelected = null

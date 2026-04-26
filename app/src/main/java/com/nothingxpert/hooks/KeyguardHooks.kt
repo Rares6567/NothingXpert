@@ -3,8 +3,13 @@ package com.nothingxpert.hooks
 import android.app.KeyguardManager
 import android.app.admin.DevicePolicyManager
 import android.content.Context
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Rect
+import android.graphics.Typeface
 import android.os.PowerManager
 import android.os.SystemClock
+import android.text.TextUtils
 import android.util.Log
 import android.view.MotionEvent
 import android.widget.TextView
@@ -25,6 +30,7 @@ class KeyguardHooks : BaseHook() {
         installDozeBlocker(lpparam)
         installTouchBlocker(lpparam)
         installTapToWakeRemap(lpparam)
+        installNSegmentsClockCenterFix(lpparam)
     }
     
     private fun installDoubleTapSleep(lpparam: XC_LoadPackage.LoadPackageParam) {
@@ -414,6 +420,26 @@ class KeyguardHooks : BaseHook() {
             )
         }
     }
+
+    private fun installNSegmentsClockCenterFix(lpparam: XC_LoadPackage.LoadPackageParam) {
+        safeHook("NSegmentsClockView.drawClock") {
+            XposedHelpers.findAndHookMethod(
+                NSEGMENTS_CLOCK_VIEW_CLASS,
+                lpparam.classLoader,
+                "drawClock",
+                Canvas::class.java,
+                object : XC_MethodHook() {
+                    override fun beforeHookedMethod(param: MethodHookParam) {
+                        if (!isNSegmentsClockCenterFixEnabled()) return
+                        val canvas = param.args.getOrNull(0) as? Canvas ?: return
+                        if (drawNSegmentsClockCentered(param.thisObject ?: return, canvas)) {
+                            param.result = null
+                        }
+                    }
+                }
+            )
+        }
+    }
     
     private fun goToSleepFromInteractor(instance: Any): Boolean {
         return try {
@@ -546,10 +572,113 @@ class KeyguardHooks : BaseHook() {
             (base * 3).coerceAtLeast(DOUBLE_TAP_WAKE_SLOP_PX)
         } catch (_: Throwable) { DOUBLE_TAP_WAKE_SLOP_PX }
     }
+
+    private fun drawNSegmentsClockCentered(clockView: Any, canvas: Canvas): Boolean {
+        return try {
+            val view = clockView as? android.view.View ?: return false
+            val timeStr = XposedHelpers.callMethod(clockView, "getTimeStr") as? String ?: return false
+            if (timeStr.isEmpty() || !TextUtils.isDigitsOnly(timeStr)) return false
+
+            val isAlignmentCenter = XposedHelpers.callMethod(clockView, "getAlignmentCenter") as? Boolean ?: true
+            if (!isAlignmentCenter) return false
+
+            val paint = XposedHelpers.getObjectField(clockView, "paint") as? Paint ?: return false
+            val scaleRatio = XposedHelpers.callMethod(clockView, "getScaleRatio") as? Float ?: return false
+            val fontSize = XposedHelpers.getFloatField(clockView, "fontSize")
+            val isDoze = XposedHelpers.callMethod(clockView, "getIsDoze") as? Boolean ?: false
+            val isScreenOff = XposedHelpers.callMethod(clockView, "getIsScreenOff") as? Boolean ?: false
+            val isRegionDark = XposedHelpers.callMethod(clockView, "getIsRegionDark") as? Boolean
+            val isDarkTextUnsafe = isDoze || isScreenOff || isRegionDark == true
+            val lsFontWeight = XposedHelpers.getIntField(clockView, "lsFontWeight")
+            val isWakingUp = XposedHelpers.getBooleanField(clockView, "isWakingUp")
+            val fontWeightAry = XposedHelpers.getObjectField(clockView, "fontWeightAry") as? Array<*> ?: return false
+
+            val curDozeState = XposedHelpers.getBooleanField(clockView, "curDozeState")
+            val nextDozeState = isDoze || isScreenOff
+            if (curDozeState != nextDozeState) {
+                XposedHelpers.setBooleanField(clockView, "curDozeState", nextDozeState)
+            }
+
+            paint.textSize = fontSize * scaleRatio
+            paint.color = if (isDarkTextUnsafe) -1 else -0x1000000
+            paint.typeface = getNSegmentsTypeface(clockView, lsFontWeight) ?: return false
+
+            val advances = FloatArray(timeStr.length)
+            var totalAdvance = 0f
+            var inkLeft = Float.POSITIVE_INFINITY
+            var inkRight = Float.NEGATIVE_INFINITY
+            val digitBounds = Rect()
+
+            for (i in timeStr.indices) {
+                val weight = (fontWeightAry.getOrNull(i) as? Number)?.toInt() ?: lsFontWeight
+                paint.typeface = getNSegmentsTypeface(clockView, weight) ?: return false
+
+                val digit = timeStr[i].toString()
+                val advance = paint.measureText(digit)
+                advances[i] = advance
+
+                digitBounds.setEmpty()
+                paint.getTextBounds(digit, 0, digit.length, digitBounds)
+                inkLeft = minOf(inkLeft, totalAdvance + digitBounds.left)
+                inkRight = maxOf(inkRight, totalAdvance + digitBounds.right)
+                totalAdvance += advance
+            }
+
+            if (totalAdvance <= 0f) return false
+
+            paint.typeface = getNSegmentsTypeface(clockView, lsFontWeight) ?: return false
+            val fontMetrics = paint.fontMetrics
+            val y = (view.height / 2.0f) - ((fontMetrics.top + fontMetrics.bottom) / 2.0f)
+
+            val inkCenterCorrection = if (inkLeft.isFinite() && inkRight.isFinite()) {
+                ((inkLeft + inkRight) - totalAdvance) / 2.0f
+            } else {
+                0f
+            }
+
+            var x = if (isWakingUp) {
+                (view.width / 2.0f) + (totalAdvance / 2.0f)
+            } else {
+                (view.width - totalAdvance) / 2.0f
+            } - inkCenterCorrection
+
+            val indices = if (isWakingUp) timeStr.indices.reversed() else timeStr.indices
+            for (index in indices) {
+                if (isWakingUp) {
+                    x -= advances[index]
+                }
+
+                val weight = (fontWeightAry.getOrNull(index) as? Number)?.toInt() ?: lsFontWeight
+                paint.typeface = getNSegmentsTypeface(clockView, weight) ?: return false
+                val digit = timeStr[index].toString()
+                canvas.drawText(digit, x, y, paint)
+                runCatching {
+                    XposedHelpers.callMethod(clockView, "setupRect", index, x.toInt(), y.toInt(), digit)
+                }
+
+                if (!isWakingUp) {
+                    x += advances[index]
+                }
+            }
+            true
+        } catch (t: Throwable) {
+            log("NSegments clock center fix failed: $t")
+            false
+        }
+    }
+
+    private fun getNSegmentsTypeface(clockView: Any, weight: Int): Typeface? {
+        return try {
+            XposedHelpers.callMethod(clockView, "getTypeface", weight) as? Typeface
+        } catch (_: Throwable) {
+            null
+        }
+    }
     
     private fun isSingleTapEnabled() = getPreferenceBoolean(PREF_SINGLE_TAP, false)
     private fun isShufflePinEnabled() = getPreferenceBoolean(PREF_SHUFFLE_PIN, false)
     private fun isDoubleTapWakeEnabled() = getPreferenceBoolean(PREF_DOUBLE_TAP_WAKE, false)
+    private fun isNSegmentsClockCenterFixEnabled() = getPreferenceBoolean(PREF_NSEGMENTS_CLOCK_CENTER_FIX, false)
     
     companion object {
         // Static versions for cross-module access
@@ -600,10 +729,12 @@ class KeyguardHooks : BaseHook() {
         private const val TOUCH_INTERACTION_HANDLER_CLASS = "com.android.systemui.common.ui.view.TouchHandlingViewInteractionHandler"
         private const val DOZE_TRIGGERS_CLASS = "com.android.systemui.doze.DozeTriggers"
         private const val NT_TAP_HANDLE_CLASS = "com.nothing.systemui.statusbar.phone.NTTapHandle"
+        private const val NSEGMENTS_CLOCK_VIEW_CLASS = "com.nothing.systemui.shared.clocks.view.NSegmentsClockView"
         
         private const val PREF_SINGLE_TAP = "pref_single_tap_sleep"
         private const val PREF_SHUFFLE_PIN = "pref_shuffle_pin"
         private const val PREF_DOUBLE_TAP_WAKE = "pref_double_tap_wake"
+        private const val PREF_NSEGMENTS_CLOCK_CENTER_FIX = "pref_nsegments_clock_center_fix"
         
         private const val TOUCH_BLOCK_MS = 0L
         private const val DOUBLE_TAP_WAKE_WINDOW_MS = 350L
