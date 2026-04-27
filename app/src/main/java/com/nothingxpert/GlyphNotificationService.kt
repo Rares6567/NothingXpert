@@ -90,6 +90,12 @@ class GlyphNotificationService : NotificationListenerService() {
     @Volatile private var isSessionOpen = false
     @Volatile private var isServiceConnected = false
     @Volatile private var isGlyphSdkAuthorized = false
+
+    // Phone (1) sysfs fallback. Only used when the Ketchum SDK can't drive the LEDs
+    // (e.g. running as a regular user app on Phone (1) where the SDK requires
+    // platform-signed/system_app caller). Phone (2) stays on the SDK path.
+    @Volatile private var sysfsFallbackReady = false
+    @Volatile private var sysfsFallbackActive = false
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var prefs: SharedPreferences
 
@@ -206,6 +212,8 @@ class GlyphNotificationService : NotificationListenerService() {
 
         // Initialize Glyph SDK
         initGlyphManager()
+        // Probe sysfs LED driver in the background (Phone (1) only).
+        initSysfsFallbackAsync()
         registerBedtimeObservers()
 
         refreshEssentialPackagesAsync(force = true)
@@ -299,6 +307,14 @@ class GlyphNotificationService : NotificationListenerService() {
                 Log.w(TAG, "Failed to disable glyph debug mode: ${e.message}")
             }
         }.start()
+    }
+
+    private fun initSysfsFallbackAsync() {
+        if (!GlyphsActivity.isPhone1()) return
+        glyphExecutor.execute {
+            sysfsFallbackReady = SysfsGlyphController.init()
+            Log.d(TAG, "Sysfs fallback ready=$sysfsFallbackReady")
+        }
     }
 
     private fun initGlyphManager() {
@@ -906,43 +922,81 @@ class GlyphNotificationService : NotificationListenerService() {
     }
 
     private fun activateGlyphs(zones: Set<String>) {
-        val gm = glyphManager ?: return
-        if (!isServiceConnected) return
+        val physicalPhone1 = GlyphsActivity.isPhone1()
+        val gm = glyphManager
 
-        if (!isSessionOpen) {
-            Log.d(TAG, "Preparing Glyph SDK authorization for activation: zones=$zones")
-            enableDebugModeSync()
-            if (!registerDevice()) {
-                Log.w(TAG, "Skip glyph activation because SDK register failed: zones=$zones")
-                return
+        // Try the Ketchum SDK path first.
+        if (gm != null && isServiceConnected) {
+            if (!isSessionOpen) {
+                Log.d(TAG, "Preparing Glyph SDK authorization for activation: zones=$zones")
+                enableDebugModeSync()
+                if (registerDevice()) {
+                    openGlyphSession()
+                } else {
+                    Log.w(TAG, "SDK register failed; will try sysfs fallback if available: zones=$zones")
+                }
             }
-            openGlyphSession()
-        }
-        if (!isGlyphSdkAuthorized || !isSessionOpen) {
-            Log.w(TAG, "Skip glyph activation because Glyph session is unavailable: authorized=$isGlyphSdkAuthorized open=$isSessionOpen zones=$zones")
-            return
-        }
-
-        try {
-            val builder = gm.glyphFrameBuilder
-            if (builder == null) {
-                Log.w(TAG, "Glyph frame builder unavailable")
-                return
+            if (isGlyphSdkAuthorized && isSessionOpen) {
+                try {
+                    val builder = gm.glyphFrameBuilder
+                    if (builder != null) {
+                        val isPhone1Channels = resolvePhone1ChannelMode()
+                        for (zone in zones) {
+                            buildChannelsForZone(builder, zone, isPhone1Channels)
+                        }
+                        gm.toggle(builder.build())
+                        Log.d(TAG, "Glyphs activated via SDK for zones: $zones")
+                        return
+                    }
+                    Log.w(TAG, "Glyph frame builder unavailable")
+                } catch (e: Exception) {
+                    Log.e(TAG, "SDK activation failed, will try sysfs fallback: ${e.message}")
+                }
+            } else {
+                Log.w(
+                    TAG,
+                    "Glyph SDK session unavailable: authorized=$isGlyphSdkAuthorized open=$isSessionOpen zones=$zones"
+                )
             }
-            val isPhone1 = resolvePhone1ChannelMode()
-
-            for (zone in zones) {
-                buildChannelsForZone(builder, zone, isPhone1)
-            }
-
-            val frame = builder.build()
-
-            gm.toggle(frame)
-
-            Log.d(TAG, "Glyphs activated for zones: $zones")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to activate glyphs: ${e.message}")
         }
+
+        // Sysfs fallback (Phone (1) only).
+        if (physicalPhone1 && sysfsFallbackReady) {
+            try {
+                val zoneFlags = zonesToPhone1Flags(zones)
+                if (!zoneFlags.any { it }) {
+                    Log.d(TAG, "No Phone(1) zones resolved from $zones; skipping sysfs write")
+                    return
+                }
+                SysfsGlyphController.activateZones(zoneFlags)
+                sysfsFallbackActive = true
+                Log.d(TAG, "Glyphs activated via sysfs for zones: $zones")
+            } catch (e: Exception) {
+                Log.e(TAG, "Sysfs activation failed: ${e.message}")
+            }
+        } else if (gm == null || !isServiceConnected) {
+            Log.w(TAG, "Skip glyph activation: SDK unavailable and no sysfs fallback. zones=$zones")
+        }
+    }
+
+    /**
+     * Map user-facing Phone (1) zone names to the 5-element boolean array
+     * SysfsGlyphController.activateZones() expects.
+     * Index: 0=A1 Camera, 1=B1 Diagonal, 2=C1-C4 Battery, 3=D1 Center, 4=E1 Bottom.
+     */
+    private fun zonesToPhone1Flags(zones: Set<String>): BooleanArray {
+        val flags = BooleanArray(SysfsGlyphController.PHONE1_ZONE_COUNT)
+        for (zone in zones) {
+            when (zone) {
+                "CAMERA" -> flags[0] = true
+                "DIAGONAL" -> flags[1] = true
+                "BATTERY" -> flags[2] = true
+                "CENTER" -> flags[3] = true
+                "BOTTOM" -> flags[4] = true
+                else -> Log.w(TAG, "Unknown Phone(1) zone for sysfs fallback: $zone")
+            }
+        }
+        return flags
     }
 
     private fun resolvePhone1ChannelMode(): Boolean {
@@ -1020,6 +1074,16 @@ class GlyphNotificationService : NotificationListenerService() {
             // Release SDK control when idle so Nothing OS features (e.g. music visualizer)
             // can acquire the Glyph session.
             closeGlyphSession()
+        }
+        if (sysfsFallbackActive) {
+            try {
+                SysfsGlyphController.turnOff()
+                Log.d(TAG, "Sysfs glyphs turned off")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to turn off sysfs glyphs: ${e.message}")
+            } finally {
+                sysfsFallbackActive = false
+            }
         }
     }
 
