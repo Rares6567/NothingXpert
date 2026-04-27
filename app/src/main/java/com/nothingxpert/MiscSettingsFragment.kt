@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
+import android.widget.Toast
+import androidx.preference.ListPreference
 import androidx.preference.Preference
 import androidx.preference.SwitchPreferenceCompat
 import com.nothingxpert.hooks.LauncherHooks
@@ -57,9 +59,48 @@ class MiscSettingsFragment : BasePreferenceFragment() {
         preferenceManager.sharedPreferencesName = "${requireContext().packageName}_preferences"
         preferenceManager.sharedPreferencesMode = Context.MODE_PRIVATE
         setPreferencesFromResource(R.xml.misc_preferences, rootKey)
+        configureMaxRefreshRatePreference()
         configureCommunityWidgetLimitPreference()
         PreferenceUtils.fixPermissions(requireContext())
         PrefsUtil.ensurePrefsAccessible(requireContext())
+    }
+
+    private fun configureMaxRefreshRatePreference() {
+        val pref = findPreference<ListPreference>(RefreshRateController.PREF_MAX_REFRESH_RATE) ?: return
+        pref.setOnPreferenceChangeListener { _, newValue ->
+            val value = RefreshRateController.normalize(newValue as? String)
+            val prefs = preferenceManager.sharedPreferences ?: return@setOnPreferenceChangeListener false
+            val saved = prefs.edit()
+                .putString(RefreshRateController.PREF_MAX_REFRESH_RATE, value)
+                .commit()
+            if (!saved) return@setOnPreferenceChangeListener false
+
+            if (isAdded) {
+                PrefsUtil.ensurePrefsAccessible(requireContext())
+                PreferenceUtils.fixPermissions(requireContext())
+            }
+
+            val appContext = requireContext().applicationContext
+            Thread {
+                val applied = RefreshRateController.apply(appContext, value, allowRoot = true)
+                if (!applied) {
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        if (isAdded) {
+                            Toast.makeText(
+                                requireContext(),
+                                R.string.toast_max_refresh_rate_failed,
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    }
+                }
+            }.apply {
+                name = "NothingXpert-RefreshRateApply"
+                isDaemon = true
+                start()
+            }
+            true
+        }
     }
 
     private fun configureCommunityWidgetLimitPreference() {

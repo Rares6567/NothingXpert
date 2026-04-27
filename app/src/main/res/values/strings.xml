@@ -15,6 +15,13 @@
     <string name="restart_systemui">Restart SystemUI</string>
     <string name="pref_category_misc">Miscellaneous</string>
     <string name="misc_category_summary">Other tweaks and customizations</string>
+    <string name="pref_category_display">Display</string>
+    <string name="pref_max_refresh_rate_title">Maximum refresh rate</string>
+    <string name="max_refresh_rate_system_default">System default</string>
+    <string name="max_refresh_rate_60">60 Hz</string>
+    <string name="max_refresh_rate_90">90 Hz</string>
+    <string name="max_refresh_rate_120">120 Hz</string>
+    <string name="toast_max_refresh_rate_failed">Could not apply maximum refresh rate</string>
     <string name="pref_allow_secure_title">Allow screenshots from restricted content</string>
     <string name="pref_allow_secure_summary">Remove the secure flag so screenshots and screen recordings work where blocked</string>
     <string name="pref_shake_torch_title">Shake to toggle flashlight</string>

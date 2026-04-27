@@ -8,6 +8,21 @@
         <item>com.google.android.inputmethod.latin</item>
     </string-array>
 
+    <!-- Maximum refresh rate entries -->
+    <string-array name="max_refresh_rate_entries">
+        <item>@string/max_refresh_rate_system_default</item>
+        <item>@string/max_refresh_rate_60</item>
+        <item>@string/max_refresh_rate_90</item>
+        <item>@string/max_refresh_rate_120</item>
+    </string-array>
+
+    <string-array name="max_refresh_rate_values">
+        <item>default</item>
+        <item>60</item>
+        <item>90</item>
+        <item>120</item>
+    </string-array>
+
     <!-- Volume long-press action entries (display names) -->
     <string-array name="volume_action_entries">
         <item>@string/volume_action_default</item>

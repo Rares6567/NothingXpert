@@ -5,6 +5,22 @@
 
 	<com.nothingxpert.ui.preferences.MaterialPreferenceCategory
 		android:layout="@layout/custom_preference_category"
+		android:title="@string/pref_category_display"
+		app:iconSpaceReserved="false">
+
+		<com.nothingxpert.ui.preferences.MaterialListPreference
+			android:key="pref_max_refresh_rate"
+			android:title="@string/pref_max_refresh_rate_title"
+			android:summary="%s"
+			android:defaultValue="default"
+			android:entries="@array/max_refresh_rate_entries"
+			android:entryValues="@array/max_refresh_rate_values"
+			app:iconSpaceReserved="false" />
+
+	</com.nothingxpert.ui.preferences.MaterialPreferenceCategory>
+
+	<com.nothingxpert.ui.preferences.MaterialPreferenceCategory
+		android:layout="@layout/custom_preference_category"
 		android:title="@string/pref_category_misc"
 		app:iconSpaceReserved="false">
 
