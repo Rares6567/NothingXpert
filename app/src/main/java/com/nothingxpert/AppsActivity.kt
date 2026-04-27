@@ -28,6 +28,16 @@ class AppsActivity : BaseActivity() {
             insets
         }
 
+        // Handle navigation bar / gesture insets so the last row isn't overlapped
+        val contentScroll = findViewById<android.widget.ScrollView>(R.id.content_scroll)
+        ViewCompat.setOnApplyWindowInsetsListener(contentScroll) { view, insets ->
+            val navInsets = insets.getInsets(
+                WindowInsetsCompat.Type.navigationBars() or WindowInsetsCompat.Type.systemGestures()
+            )
+            view.updatePadding(bottom = navInsets.bottom)
+            insets
+        }
+
         val toolbar: MaterialToolbar = findViewById(R.id.toolbar)
         toolbar.title = getString(R.string.pref_category_apps)
         setSupportActionBar(toolbar)

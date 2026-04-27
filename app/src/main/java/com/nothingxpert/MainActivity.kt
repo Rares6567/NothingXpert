@@ -121,6 +121,16 @@ class MainActivity : BaseActivity() {
             insets
         }
 
+        // Handle navigation bar / gesture insets so the tab bar is not overlapped
+        val tabBar = findViewById<View>(R.id.tab_bar)
+        ViewCompat.setOnApplyWindowInsetsListener(tabBar) { view, insets ->
+            val navInsets = insets.getInsets(
+                WindowInsetsCompat.Type.navigationBars() or WindowInsetsCompat.Type.systemGestures()
+            )
+            view.updatePadding(bottom = navInsets.bottom)
+            insets
+        }
+
         gestureDetector = android.view.GestureDetector(this, object : android.view.GestureDetector.SimpleOnGestureListener() {
             private val SWIPE_THRESHOLD = 100
             private val SWIPE_VELOCITY_THRESHOLD = 100

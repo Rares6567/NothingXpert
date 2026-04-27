@@ -1,6 +1,7 @@
 package com.nothingxpert
 
 import android.os.Bundle
+import android.widget.FrameLayout
 import androidx.activity.addCallback
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -27,6 +28,16 @@ class StatusBarSettingsActivity : BaseActivity() {
         ViewCompat.setOnApplyWindowInsetsListener(appBar) { view, insets ->
             val statusBarInsets = insets.getInsets(WindowInsetsCompat.Type.statusBars())
             view.updatePadding(top = statusBarInsets.top)
+            insets
+        }
+
+        // Handle navigation bar / gesture insets so the last preference row isn't overlapped
+        val settingsContainer = findViewById<FrameLayout>(R.id.settings_container)
+        ViewCompat.setOnApplyWindowInsetsListener(settingsContainer) { view, insets ->
+            val navInsets = insets.getInsets(
+                WindowInsetsCompat.Type.navigationBars() or WindowInsetsCompat.Type.systemGestures()
+            )
+            view.updatePadding(bottom = navInsets.bottom)
             insets
         }
 

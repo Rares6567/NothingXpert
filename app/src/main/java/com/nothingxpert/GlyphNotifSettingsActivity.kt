@@ -61,6 +61,21 @@ class GlyphNotifSettingsActivity : BaseActivity() {
             insets
         }
 
+        // Handle navigation bar / gesture insets so list and FAB clear the gesture bar
+        val contentScroll = findViewById<android.widget.ScrollView>(R.id.content_scroll)
+        val fabAdd = findViewById<FloatingActionButton>(R.id.fab_add)
+        val fabBaseMarginPx = (fabAdd.layoutParams as android.view.ViewGroup.MarginLayoutParams).bottomMargin
+        ViewCompat.setOnApplyWindowInsetsListener(contentScroll) { view, insets ->
+            val navInsets = insets.getInsets(
+                WindowInsetsCompat.Type.navigationBars() or WindowInsetsCompat.Type.systemGestures()
+            )
+            view.updatePadding(bottom = navInsets.bottom)
+            val lp = fabAdd.layoutParams as android.view.ViewGroup.MarginLayoutParams
+            lp.bottomMargin = fabBaseMarginPx + navInsets.bottom
+            fabAdd.layoutParams = lp
+            insets
+        }
+
         val toolbar: MaterialToolbar = findViewById(R.id.toolbar)
         toolbar.title = getString(R.string.glyph_notif_title)
         setSupportActionBar(toolbar)
