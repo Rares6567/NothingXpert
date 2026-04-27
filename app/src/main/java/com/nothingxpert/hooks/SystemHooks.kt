@@ -609,6 +609,7 @@ class SystemHooks : BaseHook() {
             } catch (_: Throwable) {
                 null
             } ?: return null
+
             var parent = area.parent
             while (parent is ViewGroup) {
                 if (parent.javaClass.name == "com.android.systemui.keyguard.ui.view.KeyguardRootView") {
@@ -616,6 +617,19 @@ class SystemHooks : BaseHook() {
                     return parent
                 }
                 parent = parent.parent
+            }
+
+            val windowRoot = area.rootView as? ViewGroup ?: return null
+            val resId = try {
+                windowRoot.resources.getIdentifier("keyguard_root_view", "id", "com.android.systemui")
+            } catch (_: Throwable) {
+                0
+            }
+            val byId = if (resId != 0) windowRoot.findViewById<View>(resId) as? ViewGroup else null
+            val byClass = byId ?: findViewByClassName(windowRoot, "KeyguardRootView") as? ViewGroup
+            if (byClass != null) {
+                lockscreenRootView = byClass
+                return byClass
             }
             return null
         }
