@@ -34,14 +34,6 @@
 
 		<com.nothingxpert.ui.preferences.MaterialSwitchPreference
 			android:defaultValue="false"
-			android:key="pref_nsegments_clock_center_fix"
-			android:summaryOn="@string/pref_nsegments_clock_center_fix_summary"
-			android:summaryOff="@string/pref_nsegments_clock_center_fix_summary"
-			android:title="@string/pref_nsegments_clock_center_fix_title"
-			app:iconSpaceReserved="false" />
-
-		<com.nothingxpert.ui.preferences.MaterialSwitchPreference
-			android:defaultValue="false"
 			android:key="pref_lockscreen_flashlight_tap"
 			android:summaryOn="@string/pref_lockscreen_flashlight_tap_summary"
 			android:summaryOff="@string/pref_lockscreen_flashlight_tap_summary"

@@ -8,8 +8,6 @@
     <string name="pref_single_tap_sleep_summary">Turn screen off with one tap on the lock screen</string>
     <string name="pref_shuffle_pin_title">Shuffle PIN keys</string>
     <string name="pref_shuffle_pin_summary">Randomize the PIN keypad layout on the lock screen</string>
-    <string name="pref_nsegments_clock_center_fix_title">Center N-SEGMENTS clock</string>
-    <string name="pref_nsegments_clock_center_fix_summary">Fix the N-SEGMENTS lock screen clock being visually off-center</string>
     <string name="pref_lockscreen_flashlight_tap_title">Flashlight lock screen shortcut</string>
     <string name="pref_lockscreen_flashlight_tap_summary">Show a tappable lock screen prompt while the flashlight is on</string>
     <string name="general_on">On</string>
