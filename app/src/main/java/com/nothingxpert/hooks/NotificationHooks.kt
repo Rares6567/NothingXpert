@@ -90,7 +90,7 @@ class NotificationHooks : BaseHook() {
 
     private fun hookSilenceMethod(targetClass: Class<*>, methodName: String, returnsBoolean: Boolean) {
         safeHook("${targetClass.name}.$methodName") {
-            XposedBridge.hookAllMethods(
+            val hooked = XposedBridge.hookAllMethods(
                 targetClass,
                 methodName,
                 object : XC_MethodHook() {
@@ -101,6 +101,9 @@ class NotificationHooks : BaseHook() {
                     }
                 }
             )
+            if (hooked.isEmpty()) {
+                hookSkipped("${targetClass.name}.$methodName", "method not present on this OS build")
+            }
         }
     }
 

@@ -1,7 +1,9 @@
 package com.nothingxpert
 
+import android.content.Context
 import android.net.Uri
 import android.os.Binder
+import android.os.Bundle
 import android.os.ParcelFileDescriptor
 import com.crossbowffs.remotepreferences.RemotePreferenceFile
 import com.crossbowffs.remotepreferences.RemotePreferenceProvider
@@ -120,8 +122,37 @@ class RemotePrefProvider : RemotePreferenceProvider(
         return packages.contains(appPackage) || packages.contains(SYSTEMUI_PACKAGE)
     }
 
+    override fun call(method: String, arg: String?, extras: Bundle?): Bundle? {
+        if (method == METHOD_REPORT_HOOK_STATUS) {
+            val ctx = context ?: return null
+            if (!canReadFromCaller()) return null
+            val report = extras?.getStringArrayList(KEY_HOOK_REPORT) ?: return null
+            if (report.size < 2) return null
+            val process = arg ?: report.first()
+            val details = extras.getStringArrayList(KEY_HOOK_DETAILS) ?: ArrayList()
+            val prefs = ctx.getSharedPreferences(HOOK_HEALTH_PREFS, Context.MODE_PRIVATE)
+            val editor = prefs.edit()
+            val ids = report.drop(1)
+            for (i in ids.indices) {
+                val detail = details.getOrNull(i) ?: "1\u0000ok\u00000"
+                val parts = detail.split('\u0000')
+                val installed = parts.getOrNull(0) == "1"
+                val message = parts.getOrNull(1) ?: ""
+                val stamp = parts.getOrNull(2)?.toLongOrNull() ?: 0L
+                editor.putString("$process|${ids[i]}", "$installed\u0000$message\u0000$stamp")
+            }
+            editor.apply()
+            return Bundle.EMPTY
+        }
+        return super.call(method, arg, extras)
+    }
+
     companion object {
         const val AUTHORITY = "com.nothingxpert"
+        const val HOOK_HEALTH_PREFS = "com.nothingxpert_hook_health"
+        const val METHOD_REPORT_HOOK_STATUS = "reportHookStatus"
+        const val KEY_HOOK_REPORT = "report"
+        const val KEY_HOOK_DETAILS = "details"
         const val PREF_FILE = "com.nothingxpert_preferences"
         const val DEPTH_SUBJECT_FILE = "depth_wallpaper_subject.png"
         const val DEPTH_SUBJECT_PATH = "depth_subject"

@@ -28,8 +28,6 @@ class KeyguardHooks : BaseHook() {
     }
     
     private fun installDoubleTapSleep(lpparam: XC_LoadPackage.LoadPackageParam) {
-        if (!ENABLE_DOUBLE_TAP) return
-        
         safeHook("KeyguardTouchHandlingInteractor.onDoubleClick") {
             XposedHelpers.findAndHookMethod(
                 KEYGUARD_TOUCH_CLASS,
@@ -37,6 +35,7 @@ class KeyguardHooks : BaseHook() {
                 "onDoubleClick",
                 object : XC_MethodHook() {
                     override fun beforeHookedMethod(param: MethodHookParam) {
+                        if (!isDoubleTapSleepEnabled()) return
                         val instance = param.thisObject ?: return
                         if (goToSleepFromInteractor(instance)) {
                             param.result = null
@@ -53,6 +52,7 @@ class KeyguardHooks : BaseHook() {
                 "onDoubleClick",
                 object : XC_MethodHook() {
                     override fun beforeHookedMethod(param: MethodHookParam) {
+                        if (!isDoubleTapSleepEnabled()) return
                         val viewModel = param.thisObject ?: return
                         try {
                             val interactor = XposedHelpers.getObjectField(viewModel, "interactor") ?: return
@@ -75,6 +75,7 @@ class KeyguardHooks : BaseHook() {
                 android.view.View::class.java,
                 object : XC_MethodHook() {
                     override fun beforeHookedMethod(param: MethodHookParam) {
+                        if (!isDoubleTapSleepEnabled()) return
                         val view = param.args.getOrNull(0) as? android.view.View ?: return
                         val pm = view.context.getSystemService(PowerManager::class.java) ?: return
                         val km = view.context.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
@@ -96,6 +97,7 @@ class KeyguardHooks : BaseHook() {
                 MotionEvent::class.java,
                 object : XC_MethodHook() {
                     override fun beforeHookedMethod(param: MethodHookParam) {
+                        if (!isDoubleTapSleepEnabled()) return
                         val app = currentApplication() ?: return
                         val pm = app.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return
                         val uptime = SystemClock.uptimeMillis()
@@ -117,6 +119,7 @@ class KeyguardHooks : BaseHook() {
                 Int::class.javaPrimitiveType,
                 object : XC_MethodHook() {
                     override fun beforeHookedMethod(param: MethodHookParam) {
+                        if (!isDoubleTapSleepEnabled()) return
                         val handler = param.thisObject ?: return
                         try {
                             val keyguard = XposedHelpers.getObjectField(handler, "mKeyguardStateController") ?: return
@@ -216,8 +219,7 @@ class KeyguardHooks : BaseHook() {
             )
         }
         
-        if (ENABLE_DOUBLE_TAP || isSingleTapEnabled()) {
-            safeHook("TouchHandlingView.setDoublePressHandlingEnabled") {
+        safeHook("TouchHandlingView.setDoublePressHandlingEnabled") {
                 XposedHelpers.findAndHookMethod(
                     TOUCH_HANDLING_VIEW_CLASS,
                     lpparam.classLoader,
@@ -228,20 +230,17 @@ class KeyguardHooks : BaseHook() {
                             val ctx = (param.thisObject as? android.view.View)?.context
                             val pm = ctx?.getSystemService(Context.POWER_SERVICE) as? PowerManager
                             val km = ctx?.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
+                            if (!(isDoubleTapSleepEnabled() || isSingleTapEnabled())) return
                             val screenOn = pm?.isInteractive == true
                             val onKeyguard = km?.isKeyguardLocked == true
                             if (!(screenOn && onKeyguard)) return
                             
-                            if (param.args.isNotEmpty() && param.args[0] is Boolean) {
-                                val enabled = param.args[0] as Boolean
-                                if (!enabled) {
-                                    param.args[0] = true
-                                }
+                            if (param.args.isNotEmpty() && param.args[0] as? Boolean == false) {
+                                param.args[0] = true
                             }
                         }
                     }
                 )
-            }
         }
     }
     
@@ -548,6 +547,7 @@ class KeyguardHooks : BaseHook() {
     }
 
     private fun isSingleTapEnabled() = getPreferenceBoolean(PREF_SINGLE_TAP, false)
+    private fun isDoubleTapSleepEnabled() = getPreferenceBoolean(PREF_DOUBLE_TAP_SLEEP, false)
     private fun isShufflePinEnabled() = getPreferenceBoolean(PREF_SHUFFLE_PIN, false)
     private fun isDoubleTapWakeEnabled() = getPreferenceBoolean(PREF_DOUBLE_TAP_WAKE, false)
     
@@ -610,7 +610,7 @@ class KeyguardHooks : BaseHook() {
         private const val DOUBLE_TAP_WAKE_ARM_DELAY_MS = 900L
         private const val DOUBLE_TAP_WAKE_SLOP_PX = 120
         
-        const val ENABLE_DOUBLE_TAP = false
+        private const val PREF_DOUBLE_TAP_SLEEP = "pref_double_tap_sleep"
         
         private val DOZE_BLOCKED_SENSORS = setOf(3, 4, 7, 8, 10, 11, 14)
         

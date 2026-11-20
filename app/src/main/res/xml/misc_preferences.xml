@@ -56,6 +56,12 @@
             android:defaultValue="false"
             app:iconSpaceReserved="false" />
 
+        <com.nothingxpert.ui.preferences.MaterialPreference
+            android:key="pref_open_hook_status"
+            android:title="@string/hook_status_title"
+            android:summary="@string/hook_status_summary"
+            app:iconSpaceReserved="false" />
+
     </com.nothingxpert.ui.preferences.MaterialPreferenceCategory>
 
 	<com.nothingxpert.ui.preferences.MaterialPreferenceCategory

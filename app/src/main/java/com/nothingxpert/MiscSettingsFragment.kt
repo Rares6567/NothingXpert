@@ -134,6 +134,14 @@ class MiscSettingsFragment : BasePreferenceFragment() {
             startActivity(Intent(requireContext(), UndismissableNotifsSettingsActivity::class.java))
             return true
         }
+        if (preference.key == KEY_OPEN_HOOK_STATUS) {
+            startActivity(Intent(requireContext(), HookStatusActivity::class.java))
+            return true
+        }
         return super.onPreferenceTreeClick(preference)
+    }
+
+    companion object {
+        private const val KEY_OPEN_HOOK_STATUS = "pref_open_hook_status"
     }
 }

@@ -58,6 +58,7 @@ class HookEntry : IXposedHookLoadPackage, XPrefs.OnPreferenceUpdateListener {
         }
 
         // Install all hooks
+        com.nothingxpert.hooks.HookHealth.bindProcess(pkg)
         hooks.forEach { hook ->
             try {
                 hook.install(lpparam)
@@ -106,6 +107,7 @@ class HookEntry : IXposedHookLoadPackage, XPrefs.OnPreferenceUpdateListener {
                                 )
                             }
                         }
+                        com.nothingxpert.hooks.HookHealth.flushIfPossible(context.applicationContext)
                     }
                 }
             )
@@ -148,6 +150,7 @@ class HookEntry : IXposedHookLoadPackage, XPrefs.OnPreferenceUpdateListener {
     
     private fun registerImeToggleReceiver() {
         val ctx = BaseHook.getSystemContext() ?: return
+        com.nothingxpert.hooks.HookHealth.flushIfPossible(ctx)
         synchronized(imeLock) {
             if (imeReceiverRegistered) return
             try {
