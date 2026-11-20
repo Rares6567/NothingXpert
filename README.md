@@ -6,6 +6,8 @@ A small LSPosed/Xposed module that adds useful features to your Nothing Phone wi
 
 **ONLY TESTED ON NOTHING PHONE 2 WITH NOTHING OS 4.0**
 
+**Diagnostics:** NothingXpert > Miscellaneous > **Hook status** shows which hooks installed successfully in each process, and why the failed ones broke (useful after OEM updates).
+
 **BUGS MAY OCCUR**
 
 **USE AT YOUR OWN RISK**

@@ -50,6 +50,7 @@ class GlyphNotificationService : NotificationListenerService() {
         private const val GLYPH_BEDTIME_START = "led_bed_time_custom_start_time"
         private const val GLYPH_BEDTIME_END = "led_bed_time_custom_end_time"
         private const val GLYPH_BEDTIME_WEEK = "led_bed_time_custom_week"
+        private const val STOCK_GLYPH_SWITCH = "led_effect_enable"
 
         private val ESSENTIAL_PACKAGE_REGEX =
             Regex("""AppSettings:\s+([A-Za-z0-9._]+)\s+\([0-9]+\).*?\bessential=true\b""")
@@ -446,6 +447,13 @@ class GlyphNotificationService : NotificationListenerService() {
         // Check if feature is enabled
         if (!prefs.getBoolean(GlyphNotifSettingsActivity.PREF_GLYPH_NOTIF_ENABLED, false)) return
 
+        // Yield to the system when the stock Glyph master switch is off, so the
+        // module never fights the OEM pipeline (Settings key "led_effect_enable").
+        if (!isStockGlyphEnabled()) {
+            Log.d(TAG, "Stock glyph master switch off; skipping notification")
+            return
+        }
+
         // Track screen state. Non-essential custom lighting is only when screen is off,
         // but essential tracking should still work while screen is on.
         val pm = getSystemService(Context.POWER_SERVICE) as? PowerManager
@@ -767,6 +775,15 @@ class GlyphNotificationService : NotificationListenerService() {
             false
         } finally {
             essentialRefreshInFlight.set(false)
+        }
+    }
+
+    private fun isStockGlyphEnabled(): Boolean {
+        return try {
+            if (android.provider.Settings.System.getInt(contentResolver, STOCK_GLYPH_SWITCH, 1) == 1) return true
+            android.provider.Settings.Global.getInt(contentResolver, STOCK_GLYPH_SWITCH, 1) == 1
+        } catch (_: Throwable) {
+            true
         }
     }
 

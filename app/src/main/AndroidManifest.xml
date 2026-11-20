@@ -80,6 +80,12 @@
             android:configChanges="locale|layoutDirection" />
 
         <activity
+            android:name=".HookStatusActivity"
+            android:exported="false"
+            android:label="@string/hook_status_title"
+            android:configChanges="locale|layoutDirection" />
+
+        <activity
             android:name=".StatusBarSettingsActivity"
             android:exported="false"
             android:label="@string/pref_category_status_bar"

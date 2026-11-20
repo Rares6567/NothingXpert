@@ -22,9 +22,16 @@ abstract class BaseHook {
     protected inline fun safeHook(description: String, block: () -> Unit) {
         try {
             block()
+            HookHealth.record(description, true)
         } catch (t: Throwable) {
+            HookHealth.record(description, false, t.message ?: "exception")
             log("$description failed: $t")
         }
+    }
+    
+    protected fun hookSkipped(description: String, reason: String) {
+        HookHealth.skipped(description, reason)
+        log("$description skipped: $reason")
     }
     
     companion object {

@@ -179,4 +179,14 @@
     <string name="glyph_notif_access_title">Notification access required</string>
     <string name="glyph_notif_access_summary">Grant notification access to detect incoming notifications</string>
     <string name="glyph_notif_access_button">Open Settings</string>
+
+    <!-- Hook status -->
+    <string name="pref_double_tap_sleep_title">Double tap to sleep</string>
+    <string name="pref_double_tap_sleep_summary">Turn screen off with a double tap on the lock screen</string>
+    <string name="hook_status_title">Hook status</string>
+    <string name="hook_status_summary">Check which hooks are installed in each scoped process, and why any failed</string>
+    <string name="hook_status_empty">No hook reports yet. Interact with the phone (lock/unlock, notifications), then reopen this screen.</string>
+    <string name="hook_status_ok">Installed</string>
+    <string name="hook_status_failed">Failed</string>
+    <string name="hook_status_time">Last report:</string>
 </resources>
